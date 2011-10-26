@@ -1,2 +1,5 @@
 /chroot
 /rootfs.squashfs
+/linux.uml
+/initrd
+/initrd.img
