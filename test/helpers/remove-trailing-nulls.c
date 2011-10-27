@@ -27,9 +27,9 @@ int main()
     
     fclose(stdout);
     
-    if (feof(stdin)) {
-      return 0;
-    } else {
+    if (ferror(stdin)) {
       return 1;
+    } else {
+      return 0;
     }
 }
