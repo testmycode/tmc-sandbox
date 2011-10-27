@@ -24,11 +24,9 @@ KERNEL_VERSION=3.0.4
 
 kernel: $(OUT)/linux.uml
 
-$(OUT)/linux.uml: $(OUT)/linux-$(KERNEL_VERSION)/linux
-	cp -f $< $@
-
-$(OUT)/linux-$(KERNEL_VERSION)/linux: $(OUT)/linux-$(KERNEL_VERSION) $(OUT)/aufs3-standalone
+$(OUT)/linux.uml: $(OUT)/linux-$(KERNEL_VERSION) $(OUT)/aufs3-standalone
 	scripts/compile-kernel.sh $(OUT)/linux-$(KERNEL_VERSION) $(SUBMAKE_JOBS)
+	cp -f $(OUT)/linux-$(KERNEL_VERSION)/linux $@
 
 $(OUT)/linux-$(KERNEL_VERSION): $(OUT)/linux-$(KERNEL_VERSION).tar.bz2
 	tar -C $(OUT) -xvjf $(OUT)/linux-$(KERNEL_VERSION).tar.bz2
