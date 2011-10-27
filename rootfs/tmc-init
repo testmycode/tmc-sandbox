@@ -31,7 +31,7 @@ echo "Starting tmc-run"
 echo "Completed tmc-run"
 
 # Write the result
-cat output.txt > $OUTPUT_FILE
+[ -e output.txt ] && cat output.txt > $OUTPUT_FILE
 
 echo "Shutting down..."
 
