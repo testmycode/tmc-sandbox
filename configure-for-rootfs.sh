@@ -4,11 +4,9 @@
 CHROOT=./chroot
 KERNEL_VERSION=2.6.32
 
-# Extract the UML kernel
-ln -f $CHROOT/usr/bin/linux.uml ./linux.uml
-
-# Use UML modules by default
-ln -sf /usr/lib/uml/modules/$KERNEL_VERSION $CHROOT/lib/modules/$KERNEL_VERSION
+# Ensure the kernel is compiled (TODO: this script needs to be renamed)
+kernel/compile-kernel.sh
+cp -f kernel/linux.uml ./linux.uml
 
 # Create initrd
 ./make-initrd.sh
@@ -17,6 +15,7 @@ ln -sf /usr/lib/uml/modules/$KERNEL_VERSION $CHROOT/lib/modules/$KERNEL_VERSION
 cp tmc-init/tmc-init $CHROOT/sbin/tmc-init
 chmod +x $CHROOT/sbin/tmc-init
 
+#TODO: won't need the stuff below any more. remove when refactoring
 # fstab
 cat > $CHROOT/etc/fstab <<END
 none            /proc           proc    defaults                0   0

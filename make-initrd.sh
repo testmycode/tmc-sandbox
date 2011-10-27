@@ -35,10 +35,6 @@ mkdir target
 # Busybox and its command aliases
 cp -a busybox-$BUSYBOX_VERSION/_install/* target/
 
-# Kernel modules
-mkdir -p target/lib/modules
-cp -a $CHROOT/usr/lib/uml/modules/$KERNEL_VERSION target/lib/modules/$KERNEL_VERSION
-
 # Static device files
 cp -a $CHROOT/dev target/dev
 
@@ -53,7 +49,6 @@ mkdir /rw
 mount -t squashfs -o ro /dev/ubda /ro
 mount -t tmpfs -o rw,size=64M none /rw
 
-modprobe aufs
 mkdir /aufs
 mount -t aufs -o rw,br=/rw:/ro aufs /aufs
 

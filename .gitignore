@@ -7,3 +7,6 @@
 /test/output.txt
 /test/output.txt0
 /test/helpers/remove-trailing-nulls
+/kernel/linux-*
+/kernel/aufs3-standalone
+/kernel/linux.uml
