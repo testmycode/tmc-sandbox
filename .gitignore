@@ -1,12 +1,10 @@
-/chroot
-/rootfs.squashfs
-/linux.uml
-/initrd
-/initrd.img
+
+# Build output
+/output
+
+# Ad-hoc test temporaries
 /test/data/test-exercise.tar
 /test/output.txt
 /test/output.txt0
 /test/helpers/remove-trailing-nulls
-/kernel/linux-*
-/kernel/aufs3-standalone
-/kernel/linux.uml
+

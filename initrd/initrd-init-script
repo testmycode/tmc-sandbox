@@ -1,0 +1,13 @@
+#!/bin/busybox ash
+echo "TMC customized initrd starting"
+[ -e /dev/ubda ] || mknod /dev/ubda b 98 0
+
+mkdir /ro
+mkdir /rw
+mount -t squashfs -o ro /dev/ubda /ro
+mount -t tmpfs -o rw,size=64M none /rw
+
+mkdir /aufs
+mount -t aufs -o rw,br=/rw:/ro aufs /aufs
+
+exec switch_root /aufs /sbin/tmc-init

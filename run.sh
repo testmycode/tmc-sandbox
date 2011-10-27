@@ -16,11 +16,12 @@ fi
 MAX_OUTPUT_SIZE=20M
 dd if=/dev/zero of=test/output.txt0 bs=$MAX_OUTPUT_SIZE count=1
 
-./linux.uml \
-  initrd=initrd.img \
-  ubda=rootfs.squashfs \
+output/linux.uml \
+  initrd=output/initrd.img \
+  ubda=output/rootfs.squashfs \
   ubdb=test/data/test-exercise.tar \
   ubdc=test/output.txt0 \
   mem=256M
 
 test/helpers/remove-trailing-nulls < test/output.txt0 > test/output.txt
+
