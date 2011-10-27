@@ -7,15 +7,17 @@ ifeq ($(SUBMAKE_JOBS),)
   SUBMAKE_JOBS=3
 endif
 
-# Output directory
-OUT=output
-CHROOT=$(OUT)/chroot
-
 ifneq ("$(shell id -nu)","root")
   $(error Makefile must be run as root)
 endif
 
 all: kernel initrd rootfs
+
+# Output directory
+OUT=output
+CHROOT=$(OUT)/chroot
+
+dummy_create_output_dir := $(shell test -d $(OUT) || mkdir -p $(OUT))
 
 # Kernel
 KERNEL_VERSION=3.0.4
