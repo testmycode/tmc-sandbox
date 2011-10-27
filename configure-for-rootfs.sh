@@ -13,6 +13,10 @@ ln -sf /usr/lib/uml/modules/$KERNEL_VERSION $CHROOT/lib/modules/$KERNEL_VERSION
 # Create initrd
 ./make-initrd.sh
 
+# /sbin/tmc-init
+cp tmc-init/tmc-init $CHROOT/sbin/tmc-init
+chmod +x $CHROOT/sbin/tmc-init
+
 # fstab
 cat > $CHROOT/etc/fstab <<END
 none            /proc           proc    defaults                0   0

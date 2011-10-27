@@ -46,18 +46,18 @@ cp -a $CHROOT/dev target/dev
 cat > target/init <<END
 #!/bin/busybox ash
 echo "TMC customized initrd starting"
-mknod /dev/ubda b 98 0
+[ -e /dev/ubda ] || mknod /dev/ubda b 98 0
 
 mkdir /ro
 mkdir /rw
 mount -t squashfs -o ro /dev/ubda /ro
-mount -t tmpfs -o rw none /rw
+mount -t tmpfs -o rw,size=64M none /rw
 
 modprobe aufs
 mkdir /aufs
 mount -t aufs -o rw,br=/rw:/ro aufs /aufs
 
-exec switch_root /aufs /sbin/init "$INIT_ARGS"
+exec switch_root /aufs /sbin/tmc-init
 END
 
 chmod +x target/init

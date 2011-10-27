@@ -3,3 +3,7 @@
 /linux.uml
 /initrd
 /initrd.img
+/test/data/test-exercise.tar
+/test/output.txt
+/test/output.txt0
+/test/helpers/remove-trailing-nulls

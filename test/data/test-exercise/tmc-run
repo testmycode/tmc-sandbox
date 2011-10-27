@@ -1,0 +1,18 @@
+#!/bin/sh
+# This is a very flawed runscript but it'll do for now.
+mkdir -p classes/main
+mkdir -p classes/test
+javac -d classes/main -cp lib/*:src/ src/*.java
+javac -d classes/test -cp lib/*:classes/main:test/ test/*.java
+
+DEFS="-Dtmc.exercise_dir=`pwd` 
+  -Dtmc.src_class_dir=`pwd`/classes/main 
+  -Dtmc.test_class_dir=`pwd`/classes/test
+  -Dtmc.lib_dir=`pwd`/lib
+  -Dtmc.results_file=`pwd`/output.txt"
+
+TESTS="TestMain.testStuff{1.1}"
+
+java -cp lib/*:classes/main/:classes/test/ $DEFS "fi.helsinki.cs.tmc.testrunner.Main" $TESTS
+
+exit 0
