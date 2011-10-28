@@ -47,6 +47,7 @@ endif
 
 $(OUT)/rootfs.squashfs: chroot
 	mksquashfs $(CHROOT) $@ -all-root -noappend -e /var/cache/apt $(SQUASHFS_EXTRA_OPTS)
+	chmod a+r $@
 
 chroot: $(CHROOT)/sbin/tmc-init
 
