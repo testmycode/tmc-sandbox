@@ -21,7 +21,7 @@ output/linux.uml \
   ubda=output/rootfs.squashfs \
   ubdb=test/data/test-exercise.tar \
   ubdc=test/output.txt0 \
-  mem=256M
+  mem=128M
 
 test/helpers/remove-trailing-nulls < test/output.txt0 > test/output.txt
 
