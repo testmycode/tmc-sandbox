@@ -45,10 +45,12 @@ ifneq ($(NO_SQUASHFS_COMPRESS),)
   SQUASHFS_EXTRA_OPTS="-noD -noI -noF"
 endif
 
-$(OUT)/rootfs.squashfs: $(CHROOT)
+$(OUT)/rootfs.squashfs: chroot
 	mksquashfs $(CHROOT) $@ -all-root -noappend -e /var/cache/apt $(SQUASHFS_EXTRA_OPTS)
 
-$(CHROOT): rootfs/multistrap.conf rootfs/tmc-init
+chroot: $(CHROOT)/sbin/tmc-init
+
+$(CHROOT)/sbin/tmc-init: rootfs/multistrap.conf rootfs/tmc-init
 	mkdir -p $(CHROOT)
 	multistrap -f rootfs/multistrap.conf
 	cp rootfs/tmc-init $(CHROOT)/sbin/tmc-init
@@ -74,11 +76,11 @@ $(OUT)/busybox-$(BUSYBOX_VERSION).tar.bz2:
 # Initrd
 initrd: $(OUT)/initrd.img
 
-$(OUT)/initrd.img: $(OUT)/initrd
+$(OUT)/initrd.img: $(OUT)/initrd/init
 	cd $(OUT)/initrd && mkdir -p proc sys tmp var
 	cd $(OUT)/initrd && find . | cpio --quiet -H newc -o | gzip > ../initrd.img
 
-$(OUT)/initrd: $(CHROOT) busybox
+$(OUT)/initrd/init: chroot busybox
 	mkdir $(OUT)/initrd
 	cp -a $(BUSYBOX_INSTALL_DIR)/* $(OUT)/initrd/
 	cp -a $(CHROOT)/dev $(OUT)/initrd/dev
