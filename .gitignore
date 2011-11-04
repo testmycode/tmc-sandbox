@@ -2,9 +2,6 @@
 # Build output
 /output
 
-# Ad-hoc test temporaries
-/test/data/test-exercise.tar
-/test/output.txt
-/test/output.txt0
-/test/helpers/remove-trailing-nulls
+# Temporaries
+/tmp
 
