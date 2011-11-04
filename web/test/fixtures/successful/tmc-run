@@ -1,0 +1,3 @@
+#!/bin/sh
+echo "this is the output.txt of fixtures/successful" > output.txt
+exit 0

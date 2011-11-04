@@ -1,0 +1,8 @@
+source 'http://rubygems.org'
+
+gem 'rack'
+gem 'multi_json'
+
+gem 'test-unit'
+gem 'rack-test'
+

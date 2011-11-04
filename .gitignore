@@ -5,3 +5,7 @@
 # Temporaries
 /tmp
 
+# Webservice configuration
+/web/site.yml
+/web/work
+
