@@ -129,6 +129,8 @@ end
 class SandboxApp
   include SandboxApp::Paths
 
+  class BadRequest < StandardError; end
+
   def initialize
     init_check
     @settings = load_settings
@@ -162,23 +164,40 @@ class SandboxApp
 
 private
   def serve_request
-    @runner.update_status
-    if @req.post?
-      if !@runner.busy?
-        @runner.start(@req['file'][:tempfile])
-        @respdata[:status] = 'ok'
+    begin
+      @runner.update_status
+      if @req.post?
+        serve_post_task
       else
-        @resp.status = 500
-        @respdata[:status] = 'busy'
+        serve_get_task
       end
+    rescue BadRequest
+      @respdata[:status] = 'bad_request'
+      @resp.status = 500
+    rescue
+      @respdata[:status] = 'error'
+      @resp.status = 500
+    end
+  end
+  
+  def serve_post_task
+    if !@runner.busy?
+      raise BadRequest.new('missing file parameter') if !@req['file'] || !@req['file'][:tempfile]
+      @runner.start(@req['file'][:tempfile])
+      @respdata[:status] = 'ok'
     else
-      if @runner.busy?
-        @respdata[:status] = 'busy'
-      else
-        @respdata[:status] = 'idle'
-        if @runner.has_output?
-          @respdata[:output] = @runner.output
-        end
+      @resp.status = 500
+      @respdata[:status] = 'busy'
+    end
+  end
+  
+  def serve_get_task
+    if @runner.busy?
+      @respdata[:status] = 'busy'
+    else
+      @respdata[:status] = 'idle'
+      if @runner.has_output?
+        @respdata[:output] = @runner.output
       end
     end
   end

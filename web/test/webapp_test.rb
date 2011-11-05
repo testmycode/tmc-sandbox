@@ -53,10 +53,27 @@ class WebappTest < Test::Unit::TestCase
     assert !last_response.ok?
     assert_equal 'busy', json_response['status']
     
-    @app.kill_runner # so the test finishes faster
+    @app.kill_runner # finish faster
   end
   
-  #TODO: test get '/' when busy
+  def test_get_responds_busy_when_previous_task_running
+    post '/', :file => tar_fixture('sleeper')
+    assert last_response.ok?
+    
+    get '/'
+    
+    assert last_response.ok?
+    assert_equal 'busy', json_response['status']
+    
+    @app.kill_runner # finish faster
+  end
+ 
+  def test_responds_with_error_on_bad_request
+    post '/' # no file parameter
+    
+    assert !last_response.ok?
+    assert_equal 'bad_request', json_response['status']
+  end
   
   #TODO: posting back notification when done
   
