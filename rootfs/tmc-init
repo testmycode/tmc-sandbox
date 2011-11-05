@@ -31,7 +31,8 @@ echo "Starting tmc-run"
 echo "Completed tmc-run"
 
 # Write the result
-[ -e output.txt ] && tar c output.txt > $OUTPUT_FILE
+[ -e output.txt ] || touch output.txt
+tar c output.txt > $OUTPUT_FILE
 
 echo "Shutting down..."
 
