@@ -82,10 +82,12 @@ class WebappTest < Test::Unit::TestCase
   
   def test_can_post_back_notification_when_done
     post_data = nil
+    post_content_type = nil
     resp = mimic_ok
     Mimic.mimic do
       post("/my/path") do
         post_data = params
+        post_content_type = request.env['CONTENT_TYPE']
         resp
       end
     end
@@ -93,6 +95,8 @@ class WebappTest < Test::Unit::TestCase
     post '/', :file => tar_fixture('successful'), :notify => MIMIC_BASEURL + '/my/path', :token => '123123'
     
     @app.wait_for_runner_to_finish
+    
+    assert_equal 'application/x-www-form-urlencoded', post_content_type
     
     assert_not_nil post_data
     assert_equal '123123', post_data['token']
