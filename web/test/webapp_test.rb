@@ -3,10 +3,14 @@ require 'tempfile'
 require 'pathname'
 require 'fileutils'
 require 'multi_json'
+require 'socket' # or mimic 0.4.3 fails with SocketError not found
+require 'mimic'
 require './sandbox_app'
 
 class WebappTest < Test::Unit::TestCase
   include Rack::Test::Methods
+  
+  MIMIC_BASEURL = "http://localhost:#{Mimic::MIMIC_DEFAULT_PORT}"
   
   def app
     @app = SandboxApp.new
@@ -19,6 +23,7 @@ class WebappTest < Test::Unit::TestCase
   def teardown
     @tempfiles.each {|f| f.unlink }
     @app.wait_for_runner_to_finish
+    Mimic.cleanup!
   end
   
   def test_initially_idle_no_output
@@ -75,7 +80,25 @@ class WebappTest < Test::Unit::TestCase
     assert_equal 'bad_request', json_response['status']
   end
   
-  #TODO: posting back notification when done
+  def test_can_post_back_notification_when_done
+    post_data = nil
+    resp = mimic_ok
+    Mimic.mimic do
+      post("/my/path") do
+        post_data = params
+        resp
+      end
+    end
+    
+    post '/', :file => tar_fixture('successful'), :notify => MIMIC_BASEURL + '/my/path', :token => '123123'
+    
+    @app.wait_for_runner_to_finish
+    
+    assert_not_nil post_data
+    assert_equal '123123', post_data['token']
+    assert_equal 'finished', post_data['status']
+    assert_equal 'this is the output.txt of fixtures/successful', post_data['output'].strip
+  end
   
 private
   def fixture_path
@@ -94,6 +117,10 @@ private
   def json_response
     assert last_response['Content-Type'] == 'application/json; charset=utf-8'
     MultiJson.decode(last_response.body)
+  end
+  
+  def mimic_ok
+    [200, {'Content-Type' => 'text/plain'}, "OK"]
   end
 end
 

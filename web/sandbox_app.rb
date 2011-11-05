@@ -6,6 +6,8 @@ require 'yaml'
 require 'multi_json'
 require 'pathname'
 require 'shellwords'
+require 'net/http'
+require 'uri'
 
 class SandboxApp
   module Paths
@@ -46,6 +48,7 @@ class SandboxApp
     end
   end
   
+  
   class Runner
     include Paths
     
@@ -54,7 +57,7 @@ class SandboxApp
       nuke_work_dir!
     end
     
-    def start(tar_file)
+    def start(tar_file, notifier)
       raise 'busy' if busy?
       
       nuke_work_dir!
@@ -77,15 +80,17 @@ class SandboxApp
         
         Process.exec(cmd)
       end
-    end
-    
-    def update_status
-      wait_for_process(true)
-      #TODO: kill on time limit (and set a big-ish cpu time limit?)
+      
+      @waiting_thread = Thread.fork do
+        #TODO: kill on timeout
+        pid, process_status = Process.waitpid2(@pid)
+        status = if process_status.success? then :finished else :failed end
+        notifier.send_notification(status, output) if notifier
+      end
     end
     
     def busy?
-      @pid != nil
+      @waiting_thread != nil
     end
     
     def has_output?
@@ -97,13 +102,17 @@ class SandboxApp
     end
     
     def wait
-      wait_for_process(false)
+      if @waiting_thread
+        @waiting_thread.join
+        @waiting_thread = nil
+        @pid = nil
+      end
     end
     
     def kill
-      if @pid
+      if busy?
         Process.kill("KILL", @pid)
-        wait_for_process(false)
+        wait
       end
     end
     
@@ -113,18 +122,27 @@ class SandboxApp
       FileUtils.rm_rf work_dir
       FileUtils.mkdir_p work_dir
     end
+  end
+  
+  
+  class Notifier
+    def initialize(url, token)
+      @url = url
+      @token = token
+    end
     
-    def wait_for_process(nohang)
-      if @pid
-        pid, status = Process.waitpid2(@pid, nohang ? Process::WNOHANG : 0)
-        if status
-          @return_status = status
-          @pid = nil
-        end
-      end
+    def send_notification(status, output)
+      postdata = {
+        'token' => @token,
+        'status' => status.to_s,
+        'output' => output,
+      }
+      
+      Net::HTTP.post_form(URI(@url), postdata)
     end
   end
 end
+
 
 class SandboxApp
   include SandboxApp::Paths
@@ -165,7 +183,6 @@ class SandboxApp
 private
   def serve_request
     begin
-      @runner.update_status
       if @req.post?
         serve_post_task
       else
@@ -183,7 +200,8 @@ private
   def serve_post_task
     if !@runner.busy?
       raise BadRequest.new('missing file parameter') if !@req['file'] || !@req['file'][:tempfile]
-      @runner.start(@req['file'][:tempfile])
+      notifier = if @req['notify'] then Notifier.new(@req['notify'], @req['token']) else nil end
+      @runner.start(@req['file'][:tempfile], notifier)
       @respdata[:status] = 'ok'
     else
       @resp.status = 500
