@@ -17,3 +17,8 @@ instance_ram: 128M
 #
 max_output_size: 20M
 
+#
+# Seconds before the virtualized instance is forcibly killed (with SIGKILL).
+#
+timeout: 120
+

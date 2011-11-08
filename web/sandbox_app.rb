@@ -49,22 +49,77 @@ class SandboxApp
   end
   
   
+  class SubprocessWithTimeout
+    def initialize(timeout, &block)
+      @timeout = timeout
+      @block = block
+      
+      @intermediate_pid = nil
+    end
+    
+    # Runs block in an intermediate subprocess immediately after the main subprocess finishes or times out
+    def when_done(&block)
+      @after_block = block
+    end
+    
+    def start
+      raise 'previous run now waited nor killed' if @intermediate_pid
+      
+      @intermediate_pid = Process.fork do
+        worker_pid = Process.fork(&@block)
+        timeout_pid = Process.fork do
+          [$stdin, $stdout, $stderr].each &:close
+          sleep @timeout
+        end
+        
+        finished_pid, status = Process.waitpid2(-1)
+        if finished_pid == worker_pid
+          Process.kill("KILL", timeout_pid)
+          Process.waitpid(timeout_pid)
+        else
+          Process.kill("KILL", worker_pid)
+          status = :timeout
+        end
+        
+        @after_block.call(status)
+      end
+    end
+    
+    def running?
+      wait(false)
+      @intermediate_pid != nil
+    end
+    
+    def wait(block = true)
+      if @intermediate_pid
+        if Process.waitpid(@intermediate_pid, if block then 0 else Process::WNOHANG end) != nil
+          @intermediate_pid = nil
+        end
+      end
+    end
+    
+    def kill
+      if @intermediate_pid
+        Process.kill("KILL", @intermediate_pid)
+        wait
+      end
+    end
+  end
+  
+  
   class Runner
     include Paths
     
     def initialize(settings)
       @settings = settings
       nuke_work_dir!
-    end
-    
-    def start(tar_file, notifier)
-      raise 'busy' if busy?
       
-      nuke_work_dir!
-      
-      @pid = Process.fork do
+      @subprocess = SubprocessWithTimeout.new(@settings['timeout'].to_i) do
+        $stdin.close
         $stdout.reopen("#{vm_log_path}", "w")
         $stderr.reopen($stdout)
+        
+        Process.setsid # Otherwise UML will mess up our console
         
         `dd if=/dev/zero of=#{output_tar_path} bs=#{@settings['max_output_size']} count=1`
         exit!(1) unless $?.success?
@@ -73,47 +128,50 @@ class SandboxApp
           "#{kernel_path}",
           "initrd=#{initrd_path}",
           "ubda=#{rootfs_path}",
-          "ubdb=#{tar_file.path}",
+          "ubdb=#{@tar_file.path}",
           "ubdc=#{output_tar_path}",
-          "mem=#{@settings['instance_ram']}"
+          "mem=#{@settings['instance_ram']}",
+          "con=null"
         ])
         
         Process.exec(cmd)
       end
       
-      @waiting_thread = Thread.fork do
-        #TODO: kill on timeout
-        pid, process_status = Process.waitpid2(@pid)
-        status = if process_status.success? then :finished else :failed end
-        notifier.send_notification(status, output) if notifier
+      @subprocess.when_done do |process_status|
+        status =
+          if process_status == :timeout
+            :timeout
+          elsif process_status.success?
+            :finished
+          else
+            :failed
+          end
+        
+        output = `tar --to-stdout -xf #{output_tar_path} output.txt` if status == :finished
+        @notifier.send_notification(status, output) if @notifier
       end
+    end
+    
+    def start(tar_file, notifier)
+      raise 'busy' if busy?
+      
+      nuke_work_dir!
+      @tar_file = tar_file
+      @notifier = notifier
+      
+      @subprocess.start
     end
     
     def busy?
-      @waiting_thread != nil
-    end
-    
-    def has_output?
-      output_tar_path.exist?
-    end
-    
-    def output
-      `tar --to-stdout -xf #{output_tar_path} output.txt`
+      @subprocess.running?
     end
     
     def wait
-      if @waiting_thread
-        @waiting_thread.join
-        @waiting_thread = nil
-        @pid = nil
-      end
+      @subprocess.wait
     end
     
     def kill
-      if busy?
-        Process.kill("KILL", @pid)
-        wait
-      end
+      @subprocess.kill
     end
     
   private
@@ -135,10 +193,10 @@ class SandboxApp
       postdata = {
         'token' => @token,
         'status' => status.to_s,
-        'output' => output,
+        'output' => output
       }
-      
-      Net::HTTP.post_form(URI(@url), postdata)
+
+      resp = Net::HTTP.post_form(URI(@url), postdata)
     end
   end
 end
@@ -149,9 +207,9 @@ class SandboxApp
 
   class BadRequest < StandardError; end
 
-  def initialize
+  def initialize(settings_overrides = {})
     init_check
-    @settings = load_settings
+    @settings = load_settings.merge(settings_overrides)
     @runner = Runner.new(@settings)
   end
 
@@ -166,10 +224,6 @@ class SandboxApp
     @resp.finish do
       @resp.write(MultiJson.encode(@respdata))
     end
-  end
-
-  def settings
-    @settings
   end
   
   def kill_runner
@@ -186,7 +240,8 @@ private
       if @req.post?
         serve_post_task
       else
-        serve_get_task
+        @resp.status = 404
+        @respdata[:status] = 'not_found'
       end
     rescue BadRequest
       @respdata[:status] = 'bad_request'
@@ -206,17 +261,6 @@ private
     else
       @resp.status = 500
       @respdata[:status] = 'busy'
-    end
-  end
-  
-  def serve_get_task
-    if @runner.busy?
-      @respdata[:status] = 'busy'
-    else
-      @respdata[:status] = 'idle'
-      if @runner.has_output?
-        @respdata[:output] = @runner.output
-      end
     end
   end
   

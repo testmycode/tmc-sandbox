@@ -3,17 +3,17 @@ require 'tempfile'
 require 'pathname'
 require 'fileutils'
 require 'multi_json'
-require 'socket' # or mimic 0.4.3 fails with SocketError not found
-require 'mimic'
 require './sandbox_app'
+require './test/mock_server'
 
 class WebappTest < Test::Unit::TestCase
   include Rack::Test::Methods
   
-  MIMIC_BASEURL = "http://localhost:#{Mimic::MIMIC_DEFAULT_PORT}"
-  
   def app
-    @app = SandboxApp.new
+    if !@app
+      @app = SandboxApp.new('timeout' => '30')
+    end
+    @app
   end
   
   def setup
@@ -22,31 +22,31 @@ class WebappTest < Test::Unit::TestCase
   
   def teardown
     @tempfiles.each {|f| f.unlink }
-    @app.wait_for_runner_to_finish
-    Mimic.cleanup!
+    if @app
+      @app.wait_for_runner_to_finish
+    end
   end
   
-  def test_initially_idle_no_output
-    get '/'
+  def test_runs_task_and_posts_back_notification_when_done
+    post_with_notify '/', :file => tar_fixture('successful'), :token => '123123'
     
-    assert last_response.ok?
-    assert_equal 'idle', json_response['status']
-    assert_equal nil, json_response['output']
+    assert_equal 'application/x-www-form-urlencoded', @notify_content_type
+    
+    assert_equal '123123', @notify_params['token']
+    assert_equal 'finished', @notify_params['status']
+    assert_equal 'this is the output.txt of fixtures/successful', @notify_params['output'].strip
   end
   
-  def test_basic_run_wait_get
-    post '/', :file => tar_fixture('successful')
+  def test_can_respond_to_multiple_requests
+    post_with_notify '/', :file => tar_fixture('successful'), :token => '123123'
     
-    assert last_response.ok?
-    assert_equal 'ok', json_response['status']
+    post_with_notify '/', :file => tar_fixture('successful'), :token => '456456'
     
-    @app.wait_for_runner_to_finish
+    assert_equal 'application/x-www-form-urlencoded', @notify_content_type
     
-    get '/'
-    
-    assert last_response.ok?
-    assert_equal 'idle', json_response['status']
-    assert_equal 'this is the output.txt of fixtures/successful', json_response['output'].strip
+    assert_equal '456456', @notify_params['token']
+    assert_equal 'finished', @notify_params['status']
+    assert_equal 'this is the output.txt of fixtures/successful', @notify_params['output'].strip
   end
   
   def test_post_responds_busy_when_previous_task_running
@@ -58,50 +58,22 @@ class WebappTest < Test::Unit::TestCase
     assert !last_response.ok?
     assert_equal 'busy', json_response['status']
     
-    @app.kill_runner # finish faster
-  end
-  
-  def test_get_responds_busy_when_previous_task_running
-    post '/', :file => tar_fixture('sleeper')
-    assert last_response.ok?
-    
-    get '/'
-    
-    assert last_response.ok?
-    assert_equal 'busy', json_response['status']
-    
-    @app.kill_runner # finish faster
+    app.kill_runner # finish faster
   end
  
   def test_responds_with_error_on_bad_request
-    post '/' # no file parameter
+    post '/', {} # no file parameter
     
     assert !last_response.ok?
     assert_equal 'bad_request', json_response['status']
   end
   
-  def test_can_post_back_notification_when_done
-    post_data = nil
-    post_content_type = nil
-    resp = mimic_ok
-    Mimic.mimic do
-      post("/my/path") do
-        post_data = params
-        post_content_type = request.env['CONTENT_TYPE']
-        resp
-      end
-    end
+  def test_task_may_time_out
+    @app = SandboxApp.new('timeout' => '1')
     
-    post '/', :file => tar_fixture('successful'), :notify => MIMIC_BASEURL + '/my/path', :token => '123123'
+    post_with_notify '/', :file => tar_fixture('sleeper')
     
-    @app.wait_for_runner_to_finish
-    
-    assert_equal 'application/x-www-form-urlencoded', post_content_type
-    
-    assert_not_nil post_data
-    assert_equal '123123', post_data['token']
-    assert_equal 'finished', post_data['status']
-    assert_equal 'this is the output.txt of fixtures/successful', post_data['output'].strip
+    assert_equal 'timeout', @notify_params['status']
   end
   
 private
@@ -123,8 +95,14 @@ private
     MultiJson.decode(last_response.body)
   end
   
-  def mimic_ok
-    [200, {'Content-Type' => 'text/plain'}, "OK"]
+  def post_with_notify(sandbox_path, sandbox_params)
+    srv = MockServer.new
+    req_data = srv.interact do
+      post sandbox_path, sandbox_params.merge(:notify => srv.url)
+      app.wait_for_runner_to_finish
+    end
+    @notify_content_type = req_data['content_type']
+    @notify_params = req_data['params']
   end
 end
 
