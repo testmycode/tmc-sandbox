@@ -85,7 +85,7 @@ $(OUT)/initrd.img: $(OUT)/initrd/init
 	cd $(OUT)/initrd && find . | cpio --quiet -H newc -o | gzip > ../initrd.img
 
 $(OUT)/initrd/init: chroot busybox
-	mkdir $(OUT)/initrd
+	mkdir -p $(OUT)/initrd
 	cp -a $(BUSYBOX_INSTALL_DIR)/* $(OUT)/initrd/
 	cp -a $(CHROOT)/dev $(OUT)/initrd/dev
 	cp initrd/initrd-init-script $(OUT)/initrd/init
