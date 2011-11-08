@@ -50,14 +50,16 @@ $(OUT)/rootfs.squashfs: chroot
 	mksquashfs $(CHROOT) $@ -all-root -noappend -e /var/cache/apt $(SQUASHFS_EXTRA_OPTS)
 	chmod a+r $@
 
-chroot: $(CHROOT)/sbin/tmc-init
+chroot: $(CHROOT)/var/log/dpkg.log $(CHROOT)/sbin/tmc-init
 
-$(CHROOT)/sbin/tmc-init: rootfs/multistrap.conf rootfs/tmc-init
+$(CHROOT)/var/log/dpkg.log: rootfs/multistrap.conf
 	mkdir -p $(CHROOT)
 	multistrap -f rootfs/multistrap.conf
+	umount $(CHROOT)/proc
+
+$(CHROOT)/sbin/tmc-init: $(CHROOT)/var/log/dpkg.log rootfs/tmc-init
 	cp rootfs/tmc-init $(CHROOT)/sbin/tmc-init
 	chmod +x $(CHROOT)/sbin/tmc-init
-	umount $(CHROOT)/proc
 
 # Busybox
 BUSYBOX_VERSION=1.19.2
