@@ -8,6 +8,7 @@ require 'pathname'
 require 'shellwords'
 require 'net/http'
 require 'uri'
+require 'lockfile'
 
 class SandboxApp
   module Paths
@@ -214,16 +215,20 @@ class SandboxApp
   end
 
   def call(env)
-    @req = Rack::Request.new(env)
-    @resp = Rack::Response.new
-    @resp['Content-Type'] = 'application/json; charset=utf-8'
-    @respdata = {}
-    
-    serve_request
-    
-    @resp.finish do
-      @resp.write(MultiJson.encode(@respdata))
+    raw_response = nil
+    Lockfile('lock') do
+      @req = Rack::Request.new(env)
+      @resp = Rack::Response.new
+      @resp['Content-Type'] = 'application/json; charset=utf-8'
+      @respdata = {}
+      
+      serve_request
+      
+      raw_response = @resp.finish do
+        @resp.write(MultiJson.encode(@respdata))
+      end
     end
+    raw_response
   end
   
   def kill_runner

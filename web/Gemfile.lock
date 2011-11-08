@@ -1,6 +1,7 @@
 GEM
   remote: http://rubygems.org/
   specs:
+    lockfile (2.1.0)
     multi_json (1.0.3)
     rack (1.3.5)
     rack-test (0.6.1)
@@ -11,6 +12,7 @@ PLATFORMS
   ruby
 
 DEPENDENCIES
+  lockfile
   multi_json
   rack
   rack-test

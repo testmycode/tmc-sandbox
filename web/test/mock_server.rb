@@ -15,13 +15,21 @@ class MockServer
       
       begin
         reader = Thread.fork do
-          @req_data = MultiJson.decode(pipe_in.read)
+          begin
+            @req_data = MultiJson.decode(pipe_in.read)
+          rescue
+            @req_data = nil
+          end
         end
       
         wait_for_server_to_be_ready
         block.call
       ensure
-        reader.join if reader
+        if reader
+          reader.join(2000)
+          pipe_in.close
+          reader.join rescue StandardError
+        end
         
         Process.kill("KILL", server_pid)
         Process.waitpid(server_pid)
