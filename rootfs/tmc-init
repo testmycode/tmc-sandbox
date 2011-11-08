@@ -23,19 +23,27 @@ cd $WORKDIR
 # Unzip exercise
 tar xf $EXERCISE_TAR
 
-#TODO: tmc-run without root privileges!
+# Create user and give permissions
+useradd --system tmc
+chown -R tmc $WORKDIR
+chmod -R u+rX $WORKDIR
 
-# Compile and run the program
-echo "Starting tmc-run"
-./tmc-run
-echo "Completed tmc-run"
+if `cat /proc/cmdline | grep -q tmc_run_bash`; then
+  # Support exploring the VM interactively
+  cd /
+  /bin/bash
+else
+  # Compile and run the program
+  echo "Starting tmc-run"
+  su tmc -c ./tmc-run
+  echo "Completed tmc-run"
+fi
 
 # Write the result
 [ -e output.txt ] || touch output.txt
 tar c output.txt > $OUTPUT_FILE
 
-echo "Shutting down..."
-
 # Shut down
+echo "Shutting down..."
 sync
 exec halt -f

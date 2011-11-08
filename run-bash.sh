@@ -4,8 +4,7 @@ rm -Rf tmp
 mkdir -p tmp
 cat > tmp/tmc-run <<EOS
 #!/bin/sh
-cd /
-/bin/bash
+echo "ok" > output.txt
 EOS
 chmod +x tmp/tmc-run
 
@@ -19,5 +18,6 @@ output/linux.uml \
   ubda=output/rootfs.squashfs \
   ubdb=tmp/bash-runner.tar \
   ubdc=tmp/output.tar \
-  mem=128M
+  mem=128M \
+  tmc_run_bash
 
