@@ -142,13 +142,18 @@ class SandboxApp
         status =
           if process_status == :timeout
             :timeout
-          elsif process_status.success?
-            :finished
           else
-            :failed
+            exit_code = `tar --to-stdout -xf #{output_tar_path} exit_code.txt 2>/dev/null`
+            if $?.success? && exit_code.to_i == 0
+              :finished
+            else
+              :failed
+            end
           end
         
-        output = `tar --to-stdout -xf #{output_tar_path} output.txt` if status == :finished
+        output = `tar --to-stdout -xf #{output_tar_path} output.txt 2>/dev/null`
+        output = "" if !$?.success?
+        
         @notifier.send_notification(status, output) if @notifier
       end
     end

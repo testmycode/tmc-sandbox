@@ -35,13 +35,14 @@ if `cat /proc/cmdline | grep -q tmc_run_bash`; then
 else
   # Compile and run the program
   echo "Starting tmc-run"
-  su tmc -c ./tmc-run
-  echo "Completed tmc-run"
+  EXIT_CODE=`( set +e; su tmc -c ./tmc-run > /dev/null 2>&1; echo $?; true )`
+  echo "Completed tmc-run. Exit code: $EXIT_CODE"
 fi
 
 # Write the result
 [ -e output.txt ] || touch output.txt
-tar c output.txt > $OUTPUT_FILE
+echo $EXIT_CODE > exit_code.txt
+tar c output.txt exit_code.txt > $OUTPUT_FILE
 
 # Shut down
 echo "Shutting down..."

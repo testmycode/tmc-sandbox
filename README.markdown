@@ -38,9 +38,12 @@ Expects multipart formdata with these parameters:
 It runs the task in the sandbox and sends a POST request
 to the notify URL with the following JSON object:
 
-- **status**: one of 'finished', 'failed', 'timeout'
+- **status**: one of 'finished', 'failed', 'timeout'.
+    - 'finished' iff `tmc-run` completed successfully with exit code 0.
+    - 'timeout' if `tmc-run` took too long to complete
+    - 'failed' in any other case
 - **token**: the token given in the request
-- **output**: the output.txt of the task, if status = 'finished'
+- **output**: the output.txt of the task. Empty in some failure cases.
 
 Only one task may run per instance of this webservice.
 If it is busy, it responds with a HTTP 500 and a JSON object `{status: 'busy'}`.

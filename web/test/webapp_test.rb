@@ -76,6 +76,16 @@ class WebappTest < Test::Unit::TestCase
     assert_equal 'timeout', @notify_params['status']
   end
   
+  def test_failed_runs_may_have_output
+    post_with_notify '/', :file => tar_fixture('unsuccessful_with_output'), :token => '123123'
+    
+    assert_equal 'application/x-www-form-urlencoded', @notify_content_type
+    
+    assert_equal '123123', @notify_params['token']
+    assert_equal 'failed', @notify_params['status']
+    assert_equal 'this is the output.txt of fixtures/unsuccessful_with_output', @notify_params['output'].strip
+  end
+  
 private
   def fixture_path
     Pathname.new(__FILE__).expand_path.parent + 'fixtures'
