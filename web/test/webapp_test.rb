@@ -34,6 +34,7 @@ class WebappTest < Test::Unit::TestCase
     
     assert_equal '123123', @notify_params['token']
     assert_equal 'finished', @notify_params['status']
+    assert_equal '0', @notify_params['exit_code']
     assert_equal 'this is the output.txt of fixtures/successful', @notify_params['output'].strip
   end
   
@@ -46,6 +47,7 @@ class WebappTest < Test::Unit::TestCase
     
     assert_equal '456456', @notify_params['token']
     assert_equal 'finished', @notify_params['status']
+    assert_equal '0', @notify_params['exit_code']
     assert_equal 'this is the output.txt of fixtures/successful', @notify_params['output'].strip
   end
   
@@ -74,6 +76,7 @@ class WebappTest < Test::Unit::TestCase
     post_with_notify '/', :file => tar_fixture('sleeper')
     
     assert_equal 'timeout', @notify_params['status']
+    assert_nil @notify_params['exit_code']
   end
   
   def test_failed_runs_may_have_output
@@ -83,6 +86,7 @@ class WebappTest < Test::Unit::TestCase
     
     assert_equal '123123', @notify_params['token']
     assert_equal 'failed', @notify_params['status']
+    assert_equal '42', @notify_params['exit_code']
     assert_equal 'this is the output.txt of fixtures/unsuccessful_with_output', @notify_params['output'].strip
   end
   

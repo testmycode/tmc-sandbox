@@ -139,12 +139,18 @@ class SandboxApp
       end
       
       @subprocess.when_done do |process_status|
+        exit_code = nil
         status =
           if process_status == :timeout
             :timeout
           else
             exit_code = `tar --to-stdout -xf #{output_tar_path} exit_code.txt 2>/dev/null`
-            if $?.success? && exit_code.to_i == 0
+            if $?.success?
+              exit_code = exit_code.to_i
+            else
+              exit_code = nil
+            end
+            if exit_code == 0
               :finished
             else
               :failed
@@ -154,7 +160,7 @@ class SandboxApp
         output = `tar --to-stdout -xf #{output_tar_path} output.txt 2>/dev/null`
         output = "" if !$?.success?
         
-        @notifier.send_notification(status, output) if @notifier
+        @notifier.send_notification(status, exit_code, output) if @notifier
       end
     end
     
@@ -195,12 +201,13 @@ class SandboxApp
       @token = token
     end
     
-    def send_notification(status, output)
+    def send_notification(status, exit_code, output)
       postdata = {
         'token' => @token,
         'status' => status.to_s,
         'output' => output
       }
+      postdata['exit_code'] = exit_code if exit_code != nil
 
       resp = Net::HTTP.post_form(URI(@url), postdata)
     end

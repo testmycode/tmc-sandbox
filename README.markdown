@@ -42,6 +42,7 @@ to the notify URL with the following JSON object:
     - 'finished' iff `tmc-run` completed successfully with exit code 0.
     - 'timeout' if `tmc-run` took too long to complete
     - 'failed' in any other case
+- **exit_code**: the exit code of `tmc-run`, or null if not applicable
 - **token**: the token given in the request
 - **output**: the output.txt of the task. Empty in some failure cases.
 
