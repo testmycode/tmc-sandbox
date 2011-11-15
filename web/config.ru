@@ -2,8 +2,5 @@
 
 require './sandbox_app'
 
-app = SandboxApp.new
-
-use Rack::CommonLogger
-run app
+run SandboxApp.new
 
