@@ -12,6 +12,8 @@ require 'lockfile'
 
 class SandboxApp
   module Paths
+    extend Paths
+  
     def web_dir
       Pathname.new(__FILE__).expand_path.parent
     end
@@ -21,7 +23,11 @@ class SandboxApp
     end
     
     def root_dir
-      web_dir.parent
+      @@root_dir
+    end
+    
+    def self.root_dir=(new_root_dir)
+      @@root_dir = Pathname.new(new_root_dir).expand_path(web_dir)
     end
     
     def tools_dir
@@ -221,8 +227,9 @@ class SandboxApp
   class BadRequest < StandardError; end
 
   def initialize(settings_overrides = {})
-    init_check
     @settings = load_settings.merge(settings_overrides)
+    SandboxApp::Paths.root_dir = @settings['sandbox_files_root']
+    init_check
     @runner = Runner.new(@settings)
   end
 

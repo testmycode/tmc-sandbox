@@ -31,7 +31,7 @@ class MockServer
           reader.join rescue StandardError
         end
         
-        Process.kill("KILL", server_pid)
+        Process.kill("KILL", -server_pid) # Kill by process group.
         Process.waitpid(server_pid)
       end
     end
@@ -42,6 +42,7 @@ class MockServer
 private
   def fork_server_process(pipe_in, pipe_out)
     Process.fork do
+      Process.setpgrp # Give the server its own process group so its process tree can be killed more reliably
       $stdin.close
       $stdout.close
       $stderr.close
