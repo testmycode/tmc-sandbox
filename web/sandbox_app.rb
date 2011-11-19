@@ -289,8 +289,8 @@ private
   
   def load_settings
     settings = YAML.load_file(web_dir + 'site.defaults.yml')
-    if File.exist?('site.yml')
-      settings.merge(YAML.load_file(web_dir + 'site.yml'))
+    if File.exist?(web_dir + 'site.yml')
+      settings = settings.merge(YAML.load_file(web_dir + 'site.yml'))
     end
     settings
   end
