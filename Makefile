@@ -47,7 +47,7 @@ ifneq ($(NO_SQUASHFS_COMPRESS),)
 endif
 
 $(OUT)/rootfs.squashfs: chroot
-	mksquashfs $(CHROOT) $@ -all-root -noappend -e /var/cache/apt $(SQUASHFS_EXTRA_OPTS)
+	mksquashfs $(CHROOT) $@ -all-root -noappend -e var/cache/apt $(SQUASHFS_EXTRA_OPTS)
 	chmod a+r $@
 
 chroot: $(CHROOT)/var/log/dpkg.log $(CHROOT)/sbin/tmc-init
