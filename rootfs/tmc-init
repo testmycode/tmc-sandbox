@@ -3,6 +3,8 @@
 
 echo "Entering tmc-init"
 
+export LANG="en_US.UTF-8"
+
 EXERCISE_TAR=/dev/ubdb
 OUTPUT_FILE=/dev/ubdc
 WORKDIR=/tmc

@@ -55,6 +55,8 @@ chroot: $(CHROOT)/var/log/dpkg.log $(CHROOT)/sbin/tmc-init
 $(CHROOT)/var/log/dpkg.log: rootfs/multistrap.conf
 	mkdir -p $(CHROOT)
 	multistrap -f rootfs/multistrap.conf
+	echo "en_US.UTF-8 UTF-8" > $(CHROOT)/etc/locale.gen
+	chroot $(CHROOT) /usr/sbin/locale-gen
 	umount $(CHROOT)/proc
 
 $(CHROOT)/sbin/tmc-init: $(CHROOT)/var/log/dpkg.log rootfs/tmc-init
