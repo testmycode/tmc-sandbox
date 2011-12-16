@@ -1,5 +1,5 @@
 [General]
-arch=amd64
+arch=__ARCH__
 directory=./output/chroot
 cleanup=false  # We'll tell rootfs to exclude the downloaded packages
 unpack=true

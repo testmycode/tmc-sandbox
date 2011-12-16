@@ -11,7 +11,6 @@ if [ ! -d fs/aufs ]; then
   cp -av ../aufs3-standalone/Documentation/* Documentation/
   cp -av ../aufs3-standalone/fs/* fs/
   cp -av ../aufs3-standalone/include/linux/aufs_type.h include/linux/
-  cp -v ../../kernel/kernel-config ./.config
 fi
 make -j$SUBMAKE_JOBS ARCH=um
 

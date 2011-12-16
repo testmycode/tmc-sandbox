@@ -11,6 +11,8 @@ ifneq ("$(shell id -nu)","root")
   $(error Makefile must be run as root)
 endif
 
+ARCH := $(shell dpkg --print-architecture)
+
 all: kernel initrd rootfs
 
 # Output directory
@@ -30,7 +32,7 @@ $(OUT)/linux.uml: $(OUT)/linux-$(KERNEL_VERSION) $(OUT)/aufs3-standalone
 
 $(OUT)/linux-$(KERNEL_VERSION): $(OUT)/linux-$(KERNEL_VERSION).tar.bz2
 	tar -C $(OUT) -xvjf $(OUT)/linux-$(KERNEL_VERSION).tar.bz2
-	cp kernel/kernel-config $(OUT)/linux-$(KERNEL_VERSION)/.config
+	cp kernel/kernel-config.$(ARCH) $(OUT)/linux-$(KERNEL_VERSION)/.config
 
 $(OUT)/linux-$(KERNEL_VERSION).tar.bz2:
 	wget -O $@ http://www.kernel.org/pub/linux/kernel/v3.0/linux-$(KERNEL_VERSION).tar.bz2
@@ -52,9 +54,12 @@ $(OUT)/rootfs.squashfs: chroot
 
 chroot: $(CHROOT)/var/log/dpkg.log $(CHROOT)/sbin/tmc-init
 
-$(CHROOT)/var/log/dpkg.log: rootfs/multistrap.conf
+$(OUT)/multistrap.conf: rootfs/multistrap.conf.in
+	sed 's/__ARCH__/$(ARCH)/' < $< > $@
+
+$(CHROOT)/var/log/dpkg.log: $(OUT)/multistrap.conf
 	mkdir -p $(CHROOT)
-	multistrap -f rootfs/multistrap.conf
+	multistrap -f $(OUT)/multistrap.conf
 	echo "en_US.UTF-8 UTF-8" > $(CHROOT)/etc/locale.gen
 	chroot $(CHROOT) /usr/sbin/locale-gen
 	umount $(CHROOT)/proc
