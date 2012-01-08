@@ -100,20 +100,36 @@ $(OUT)/initrd/init: chroot busybox
 
 
 # Cleanup
-clean:
+clean: clean-kernel clean-rootfs clean-busybox clean-initrd
+	
+
+distclean:
 	rm -Rf $(OUT)
 
 clean-kernel:
-	rm -Rf $(OUT)/linux-$(KERNEL_VERSION) $(OUT)/linux.uml
+	rm -Rf $(OUT)/linux-$(KERNEL_VERSION)
+	rm -Rf $(OUT)/linux-$(KERNEL_VERSION).tar.bz2
+	rm -Rf $(OUT)/aufs3-standalone
 
-clean-chroot:
+distclean-kernel: clean-kernel
+	rm -Rf $(OUT)/linux.uml
+
+clean-rootfs:
 	rm -Rf $(CHROOT)
+	rm -Rf $(OUT)/multistrap.conf
 
-clean-rootfs: clean-chroot
+distclean-rootfs: clean-rootfs
 	rm -f $(OUT)/rootfs.squashfs
 
 clean-busybox:
 	rm -Rf $(OUT)/busybox-$(BUSYBOX_VERSION)
+	rm -Rf $(OUT)/busybox-$(BUSYBOX_VERSION).tar.bz2
+
+distclean-busybox: clean-busybox
 
 clean-initrd:
-	rm -Rf $(OUT)initrd $(OUT)/initrd.img
+	rm -Rf $(OUT)/initrd
+
+distclean-initrd: clean-initrd
+	$(OUT)/initrd.img
+
