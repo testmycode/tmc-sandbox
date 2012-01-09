@@ -42,6 +42,7 @@ else
 fi
 
 # Write the result
+# TODO: could simplify delivering the exit code by putting it in /proc/exitcode
 [ -e output.txt ] || touch output.txt
 echo $EXIT_CODE > exit_code.txt
 tar c output.txt exit_code.txt > $OUTPUT_FILE
