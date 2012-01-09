@@ -28,3 +28,8 @@ max_output_size: 20M
 #
 timeout: 120
 
+#
+# A log file with debug information.
+#
+debug_log_file:
+

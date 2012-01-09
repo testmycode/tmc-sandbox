@@ -26,7 +26,7 @@ class MockServer
         block.call
       ensure
         if reader
-          reader.join(2000)
+          reader.join(2)
           pipe_in.close
           reader.join rescue StandardError
         end
@@ -67,19 +67,28 @@ private
         end
       end.to_app
       
-      Rack::Handler::WEBrick.run(app, :Host => 'localhost', :Port => 11988, :Logger => WEBrick::Log.new('/dev/null'))
+      webrick_log = WEBrick::Log.new('/dev/null')
+      webrick_opts = {
+        :Host => 'localhost',
+        :Port => 11988,
+        :Logger => webrick_log,
+        :AccessLog => [ [webrick_log, WEBrick::AccessLog::COMBINED_LOG_FORMAT] ]
+      }
+      Rack::Handler::WEBrick.run(app, webrick_opts)
     end
   end
   
   def wait_for_server_to_be_ready
-    while true
+    deadline = Time.now + 10
+    while Time.now < deadline
       begin
         Net::HTTP.get(URI('http://localhost:11988/ready'))
-        break
+        return
       rescue Errno::ECONNREFUSED
         sleep 0.1
       end
     end
+    raise 'MockServer timed out waiting for server to become ready'
   end
   
   def pipe_block(&block)

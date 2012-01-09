@@ -9,11 +9,21 @@ require 'shellwords'
 require 'net/http'
 require 'uri'
 require 'lockfile'
+require 'logger'
 
 class SandboxApp
+  def self.debug_log # Dunno if Logger is safe to use in subprocesses, but don't care since it's a debug tool.
+    @debug_log ||= Logger.new('/dev/null')
+  end
+  
+  def self.debug_log=(new_logger)
+    @debug_log = new_logger
+  end
+  
+  
   module Paths
     extend Paths
-  
+    
     def web_dir
       Pathname.new(__FILE__).expand_path.parent
     end
@@ -70,25 +80,40 @@ class SandboxApp
     end
     
     def start
-      raise 'previous run now waited nor killed' if @intermediate_pid
+      raise 'previous run not waited nor killed' if @intermediate_pid
       
       @intermediate_pid = Process.fork do
+        # We start a new session for two reasons.
+        # First, we want to be able to kill the whole process group at once.
+        # Second, UML likes to mess up the current session's console.
+        #
+        # Also, when UML panics, it goes berserk and kills its entire process group.
+        # `wait` will then find this process dead by SIGTERM.
+        #
+        # Moreover we shall kill this entire process group if the UML timeouts too,
+        # since otherwise UML child processes may be left, holding locks to files
+        # and preventing future UMLs from starting.
+        Process.setsid
+        
         worker_pid = Process.fork(&@block)
         timeout_pid = Process.fork do
           [$stdin, $stdout, $stderr].each &:close
           sleep @timeout
         end
+        SandboxApp.debug_log.debug "PIDS: Intermediate(#{Process.pid}), Worker(#{worker_pid}), Timeout(#{timeout_pid})"
         
         finished_pid, status = Process.waitpid2(-1)
         if finished_pid == worker_pid
+          SandboxApp.debug_log.debug "Worker finished with status #{status.inspect}"
           Process.kill("KILL", timeout_pid)
           Process.waitpid(timeout_pid)
         else
-          Process.kill("KILL", worker_pid)
+          SandboxApp.debug_log.debug "Worker timed out. Will send notification and kill process group."
           status = :timeout
         end
         
         @after_block.call(status)
+        Process.kill("KILL", -Process.pid) if status == :timeout
       end
     end
     
@@ -99,7 +124,11 @@ class SandboxApp
     
     def wait(block = true)
       if @intermediate_pid
-        if Process.waitpid(@intermediate_pid, if block then 0 else Process::WNOHANG end) != nil
+        SandboxApp.debug_log.debug "Waiting for runner (#{@intermediate_pid}) to stop (blocking = #{block})"
+        
+        pid, status = Process.waitpid2(@intermediate_pid, if block then 0 else Process::WNOHANG end)
+        if pid != nil
+          SandboxApp.debug_log.debug "Runner (#{@intermediate_pid}) stopped. Status: #{status.inspect}."
           @intermediate_pid = nil
         end
       end
@@ -107,7 +136,8 @@ class SandboxApp
     
     def kill
       if @intermediate_pid
-        Process.kill("KILL", @intermediate_pid)
+        SandboxApp.debug_log.debug "Killing runner (#{@intermediate_pid}) process group"
+        Process.kill("KILL", -@intermediate_pid) # kill entire process group
         wait
       end
     end
@@ -126,8 +156,6 @@ class SandboxApp
         $stdout.reopen("#{vm_log_path}", "w")
         $stderr.reopen($stdout)
         
-        Process.setsid # Otherwise UML will mess up our console
-        
         `dd if=/dev/zero of=#{output_tar_path} bs=#{@settings['max_output_size']} count=1`
         exit!(1) unless $?.success?
         
@@ -141,6 +169,7 @@ class SandboxApp
           "con=null"
         ])
         
+        SandboxApp.debug_log.debug "PID #{Process.pid} executing: #{cmd}"
         Process.exec(cmd)
       end
       
@@ -149,11 +178,12 @@ class SandboxApp
         status =
           if process_status == :timeout
             :timeout
-          else
+          elsif process_status.success?
             exit_code = `tar --to-stdout -xf #{output_tar_path} exit_code.txt 2>/dev/null`
             if $?.success?
               exit_code = exit_code.to_i
             else
+              SandboxApp.debug_log.warn "Failed to untar exit_code.txt"
               exit_code = nil
             end
             if exit_code == 0
@@ -161,8 +191,12 @@ class SandboxApp
             else
               :failed
             end
+          else
+            SandboxApp.debug_log.warn "Sandbox failed with status #{process_status.inspect}"
+            :failed
           end
         
+        SandboxApp.debug_log.debug "Status: #{status}. Exit code: #{exit_code.inspect}."
         output = `tar --to-stdout -xf #{output_tar_path} output.txt 2>/dev/null`
         output = "" if !$?.success?
         
@@ -195,6 +229,7 @@ class SandboxApp
   private
     
     def nuke_work_dir!
+      SandboxApp.debug_log.debug "Clearing work dir"
       FileUtils.rm_rf work_dir
       FileUtils.mkdir_p work_dir
     end
@@ -215,6 +250,7 @@ class SandboxApp
       }
       postdata['exit_code'] = exit_code if exit_code != nil
 
+      SandboxApp.debug_log.debug "Notifying #{@url}"
       resp = Net::HTTP.post_form(URI(@url), postdata)
     end
   end
@@ -228,6 +264,7 @@ class SandboxApp
 
   def initialize(settings_overrides = {})
     @settings = load_settings.merge(settings_overrides)
+    SandboxApp.debug_log = Logger.new(@settings['debug_log_file']) unless @settings['debug_log_file'].to_s.empty?
     SandboxApp::Paths.root_dir = @settings['sandbox_files_root']
     init_check
     @runner = Runner.new(@settings)

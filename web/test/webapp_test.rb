@@ -25,6 +25,7 @@ class WebappTest < Test::Unit::TestCase
     if @app
       @app.wait_for_runner_to_finish
     end
+    SandboxApp.debug_log.debug "----- TEST FINISHED -----"
   end
   
   def test_runs_task_and_posts_back_notification_when_done
@@ -89,7 +90,7 @@ class WebappTest < Test::Unit::TestCase
     assert_equal '42', @notify_params['exit_code']
     assert_equal 'this is the output.txt of fixtures/unsuccessful_with_output', @notify_params['output'].strip
   end
-  
+
 private
   def fixture_path
     Pathname.new(__FILE__).expand_path.parent + 'fixtures'
@@ -115,6 +116,7 @@ private
       post sandbox_path, sandbox_params.merge(:notify => srv.url)
       app.wait_for_runner_to_finish
     end
+    raise 'No data received from MockServer. Did the program send any?' if req_data == nil
     @notify_content_type = req_data['content_type']
     @notify_params = req_data['params']
   end
