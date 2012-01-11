@@ -2,7 +2,7 @@
 
 #
 # The relative or absolute path to the root directory of tmc-sandbox is compiled.
-# Multiple instances of the server may share the compiled files.
+# Multiple instances of the server may not share the compiled files, due to locking conflicts.
 #
 sandbox_files_root: ../
 
