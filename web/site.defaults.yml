@@ -16,7 +16,7 @@ sandbox_files_root: ../output
 # A virtualized instance won't actually reserve all of
 # it's memory allocation unless it needs to.
 #
-instance_ram: 64M
+instance_ram: 96M
 
 #
 # The maximum output.txt size accepted.

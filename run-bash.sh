@@ -18,6 +18,6 @@ output/linux.uml \
   ubda=output/rootfs.squashfs \
   ubdb=tmp/bash-runner.tar \
   ubdc=tmp/output.tar \
-  mem=64M \
+  mem=96M \
   tmc_run_bash
 
