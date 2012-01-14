@@ -12,7 +12,7 @@ output/linux.uml \
   ubda=output/rootfs.squashfs \
   ubdb=tmp/test-exercise.tar \
   ubdc=tmp/output.tar \
-  mem=128M
+  mem=64M
 
 tar -C tmp -xf tmp/output.tar
 
