@@ -1,10 +1,10 @@
 # NOTE: Don't edit this file. Create a `site.yml` and override the settings there instead.
 
 #
-# The relative or absolute path to the root directory of tmc-sandbox is compiled.
-# Multiple instances of the server may not share the compiled files, due to locking conflicts.
+# The relative or absolute path to the directory that contains linux.uml, initrd.img and rootfs.squashfs.
+# Multiple instances of the server may NOT share the compiled files, due to locking conflicts.
 #
-sandbox_files_root: ../
+sandbox_files_root: ../output
 
 #
 # The amount of RAM for each user-mode linux instance.

@@ -40,20 +40,16 @@ class SandboxApp
       @@root_dir = Pathname.new(new_root_dir).expand_path(web_dir)
     end
     
-    def tools_dir
-      root_dir + 'output'
-    end
-    
     def kernel_path
-      tools_dir + 'linux.uml'
+      root_dir + 'linux.uml'
     end
     
     def rootfs_path
-      tools_dir + 'rootfs.squashfs'
+      root_dir + 'rootfs.squashfs'
     end
     
     def initrd_path
-      tools_dir + 'initrd.img'
+      root_dir + 'initrd.img'
     end
     
     def output_tar_path
