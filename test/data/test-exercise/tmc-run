@@ -11,7 +11,7 @@ DEFS="-Dtmc.exercise_dir=`pwd`
   -Dtmc.lib_dir=`pwd`/lib
   -Dtmc.results_file=`pwd`/output.txt"
 
-TESTS="TestMain.testStuff{1.1}"
+TESTS="MainTest.testStuff{1.1}"
 
 java -cp lib/*:classes/main/:classes/test/ $DEFS "fi.helsinki.cs.tmc.testrunner.Main" $TESTS
 
