@@ -9,8 +9,8 @@ dd if=/dev/zero of=tmp/output.tar bs=$MAX_OUTPUT_SIZE count=1
 
 output/linux.uml \
   initrd=output/initrd.img \
-  ubda=output/rootfs.squashfs \
-  ubdb=tmp/test-exercise.tar \
+  ubdarc=output/rootfs.squashfs \
+  ubdbr=tmp/test-exercise.tar \
   ubdc=tmp/output.tar \
   mem=96M
 

@@ -17,8 +17,8 @@ You may need to download `http://ftp-master.debian.org/archive-key-6.0.asc` and 
 The sandbox is invoked by starting `linux.uml` with at least the following kernel parameters:
 
 - `initrd=initrd.img` - the initrd.
-- `ubda=rootfs.squashfs` - the rootfs.
-- `ubdb=runnable.tar` - an uncompressed tar file containing an executable `tmc-run`.
+- `ubdarc=rootfs.squashfs` - the rootfs (the `rc` meaning read-only shared).
+- `ubdbr=runnable.tar` - an uncompressed tar file containing an executable `tmc-run`.
 - `ubdc=output.tar` - a zeroed file with a reasonable amount of space for the output. `output.txt` will be written there as a tar-file.
 - `mem=xyzM` - the memory limit.
 
@@ -49,6 +49,7 @@ to the notify URL with the following JSON object:
 Only one task may run per instance of this webservice.
 If it is busy, it responds with a HTTP 500 and a JSON object `{status: 'busy'}`.
 Multiple instances should be deployed to separate directories under separate URLs.
+They may, however, share the same rootfs image file.
 
 Authentication and encryption should be configured into the web server as usual.
 

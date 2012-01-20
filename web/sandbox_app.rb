@@ -158,8 +158,8 @@ class SandboxApp
         cmd = Shellwords.join([
           "#{kernel_path}",
           "initrd=#{initrd_path}",
-          "ubda=#{rootfs_path}",
-          "ubdb=#{@tar_file.path}",
+          "ubdarc=#{rootfs_path}",
+          "ubdbr=#{@tar_file.path}",
           "ubdc=#{output_tar_path}",
           "mem=#{@settings['instance_ram']}",
           "con=null"
