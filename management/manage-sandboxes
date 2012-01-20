@@ -1,0 +1,233 @@
+#!/usr/bin/env ruby
+
+require 'rubygems'
+require 'lockfile'
+require 'yaml'
+require 'fileutils'
+
+class SandboxManager
+
+  class BaseConfig
+    def sandbox_files_path
+      './tmc-sandbox/output'
+    end
+    
+    def master_copy_path
+      './tmc-sandbox/web'	
+    end
+    
+    def site_yml_contents
+      # Don't define sandbox_files_root here, anything else goes.
+      # This will replace any site.yml in the master copy.
+      {}
+    end
+    
+    # this could one day have before_* and after_* hooks
+  end
+  
+  
+  class Instance
+    def initialize(config, port)
+      @config = config
+      @port = port
+    end
+    
+    attr_reader :config, :port
+    
+    def dir
+      @port
+    end
+    
+    def pidfile
+      dir + '/webrick.pid'
+    end
+    
+    def create
+      raise "#{dir} already exists!" if File.exist?(dir)
+      FileUtils.cp_r(config.master_copy_path, dir)
+      
+      site_yml = @config.site_yml_contents
+      site_yml.merge!({ 'sandbox_files_root' => File.expand_path(@config.sandbox_files_path) })
+      File.open("#{dir}/site.yml", 'wb') {|f| f.write(YAML.dump(site_yml)) }
+    end
+    
+    def destroy
+      stop if running?
+      FileUtils.rm_rf(dir)
+    end
+    
+    def rebuild
+      stop
+      destroy
+      create
+      start
+    end
+    
+    def start
+      cmd = "bundle exec rackup --server webrick --port #{port} --pid webrick.pid >> webrick.log 2>&1 &"
+      system("cd #{dir} && #{cmd}")
+      raise "Failed to start instance #{port}. Status: #{$?}" unless $?.success?
+      if !wait_with_timeout(5) { running? }
+        raise "Instance #{port} did not start for some reason." if !running?
+      end
+    end
+    
+    def start!
+      FileUtils.rm_f("#{dir}/webrick.pid")
+      start
+    end
+    
+    def stop
+      if running?
+        pid = File.read(pidfile).to_i
+        Process.kill('INT', pid)
+        if !wait_with_timeout(5) { !running? }
+          puts "Forcibly terminating instance #{port} PID #{pid} since it didn't respond to SIGINT."
+          Process.kill('KILL', pid)
+        end
+      end
+    end
+    
+    def restart
+      stop
+      start
+    end
+    
+    def running?
+      File.exist?(pidfile) && pid_exists?(File.read(pidfile).to_i)
+    end
+    
+  private
+    def pid_exists?(pid)
+      begin
+        Process.kill(0, pid)
+        true
+      rescue
+        false
+      end
+    end
+    
+    def wait_with_timeout(timeout, &block)
+      start_time = Time.now
+      while !block.call && Time.now - start_time < timeout
+        sleep 0.2
+      end
+      block.call
+    end
+  end
+  
+  
+  
+  def initialize(args)
+    parse_args(args)
+    load_config
+  end
+  
+  
+  def execute
+    Lockfile.new('manage-sandboxes.lock') do
+      simple_commands = ['create', 'rebuild', 'destroy', 'start', 'stop', 'restart']
+      
+      if simple_commands.include?(@command)
+        ports = optionally_args_as_ports
+        instances = ports.map {|port| Instance.new(@config, port) }
+        instances.each do |instance|
+          puts "#{@command} #{instance.port}"
+          instance.send(@command)
+        end
+      elsif @command == 'onboot'
+        instances = all_ports.map {|port| Instance.new(@config, port) }
+        instances.each do |instance|
+          puts "start! #{instance.port}"
+          instance.start!
+        end
+      else
+        raise "Unknown command: #{@command}"
+      end
+    end
+  end
+  
+  def all_ports
+    Dir.new('.').to_a.select {|d| d =~ /^\d+$/ }.sort
+  end
+  
+private
+  def optionally_args_as_ports
+    if !@args.empty?
+      @args.each(&:to_i)
+    else
+      all_ports
+    end
+  end
+
+  def parse_args(args)
+    @args = []
+    args = args.clone
+    until args.empty?
+      arg = args.shift
+      if arg == '-c' || arg == '--config'
+        @config_file = args.shift
+        args.unshift nil
+      elsif arg == '-h' || arg == '--help'
+        puts help_text
+        exit(0)
+      elsif !@command
+        @command = arg
+      else
+        @args << arg
+      end
+    end
+    
+    if !@command
+      puts help_text
+      exit(1)
+    end
+  end
+  
+  def load_config
+    if !@config_file && File.exist?('config.rb')
+      @config_file = 'config.rb'
+    end
+    if @config_file
+      require @config_file
+      @config = SandboxManagerConfig.new
+    else
+      @config = BaseConfig.new
+    end
+  end
+
+  def help_text
+    <<EOS
+Usage: manage-sandboxes [-c|--config file] <command> [args]
+
+Manages sandbox instances in the current directory.
+A configuration file may be present. See config.example.rb.
+
+Commands:
+  create [ports]     - For each <port>, creates a new server listening to it
+                       in a directory named <port>. The directory
+                       will be a copy of 'tmc-sandbox/web'.
+  
+  rebuild [ports]    - Stops, deletes, creates and starts all or
+                       the specified servers.
+                       Useful to pull upgrades from the master copy.
+  
+  destroy [ports]    - Stops and deletes the given servers.
+  
+  start [ports]      - Starts the specified servers,
+                       unless already started.
+  
+  stop [ports]       - Stops the specified servers.
+  
+  restart [ports]    - Restarts the specified servers.
+  
+  onboot             - Deletes all pidfiles and starts all instances.
+                       Only invoke this if you're sure no instance is
+                       already running.
+
+EOS
+  end
+end
+
+SandboxManager.new(ARGV).execute
+
