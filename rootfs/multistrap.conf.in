@@ -5,7 +5,7 @@ cleanup=false  # We'll tell rootfs to exclude the downloaded packages
 unpack=true
 debootstrap=Debian Updates
 aptsources=Debian Updates
-setupscript=./scripts/before-dpkg-setup.sh
+setupscript=./build-scripts/before-dpkg-setup.sh
 
 [Debian]
 packages=makedev locales build-essential g++ openjdk-6-jdk

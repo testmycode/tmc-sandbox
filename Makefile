@@ -27,7 +27,7 @@ KERNEL_VERSION=3.1
 kernel: $(OUT)/linux.uml
 
 $(OUT)/linux.uml: $(OUT)/linux-$(KERNEL_VERSION) $(OUT)/aufs3-standalone
-	scripts/compile-kernel.sh $(OUT)/linux-$(KERNEL_VERSION) $(SUBMAKE_JOBS)
+	build-scripts/compile-kernel.sh $(OUT)/linux-$(KERNEL_VERSION) $(SUBMAKE_JOBS)
 	cp -f $(OUT)/linux-$(KERNEL_VERSION)/linux $@
 
 $(OUT)/linux-$(KERNEL_VERSION): $(OUT)/linux-$(KERNEL_VERSION).tar.bz2
