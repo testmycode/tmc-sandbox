@@ -4,6 +4,7 @@
 
 # Temporaries
 /tmp
+/test/bash-runner
 
 # Webservice
 /web/site.yml

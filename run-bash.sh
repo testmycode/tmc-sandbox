@@ -1,5 +1,7 @@
 #!/bin/sh
 
+# Put stuff in test/bash-runner/ (create it first) and it'll be in /tmc/ in the sandbox.
+
 rm -Rf tmp
 mkdir -p tmp
 cat > tmp/tmc-run <<EOS
@@ -7,8 +9,11 @@ cat > tmp/tmc-run <<EOS
 echo "ok" > output.txt
 EOS
 chmod +x tmp/tmc-run
+test -d test/bash-runner && cp -r test/bash-runner/* tmp/
 
-tar -C tmp -cf tmp/bash-runner.tar tmc-run || exit 1
+cd tmp
+tar -cf bash-runner.tar * || exit 1
+cd ..
 
 MAX_OUTPUT_SIZE=20M
 dd if=/dev/zero of=tmp/output.tar bs=$MAX_OUTPUT_SIZE count=1
