@@ -1,7 +1,7 @@
 [General]
 arch=__ARCH__
 directory=./output/chroot
-cleanup=false  # We'll tell rootfs to exclude the downloaded packages
+cleanup=false  # We'll tell squashfs to exclude the downloaded packages
 unpack=true
 debootstrap=Debian Updates
 aptsources=Debian Updates
