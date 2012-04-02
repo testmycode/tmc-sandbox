@@ -8,7 +8,7 @@ aptsources=Debian Updates
 setupscript=./build-scripts/before-dpkg-setup.sh
 
 [Debian]
-packages=makedev locales build-essential g++ openjdk-6-jdk nano procps
+packages=makedev locales build-essential g++ openjdk-6-jdk nano procps xvfb
 source=http://ftp.fi.debian.org/debian
 keyring=debian-archive-keyring
 suite=squeeze
