@@ -1,0 +1,12 @@
+diff -uprN -X linux-3.4.1/Documentation/dontdiff linux-3.4.1/arch/um/drivers/ubd_kern.c linux-3.4.1-mod/arch/um/drivers/ubd_kern.c
+--- linux-3.4.1/arch/um/drivers/ubd_kern.c	2012-06-01 10:18:44.000000000 +0300
++++ linux-3.4.1-mod/arch/um/drivers/ubd_kern.c	2012-06-07 17:02:38.625453504 +0300
+@@ -514,7 +514,7 @@ static inline int ubd_file_size(struct u
+ 		goto out;
+ 	}
+ 
+-	fd = os_open_file(ubd_dev->file, global_openflags, 0);
++	fd = os_open_file(ubd_dev->file, of_read(OPENFLAGS()), 0);
+ 	if (fd < 0)
+ 		return fd;
+ 

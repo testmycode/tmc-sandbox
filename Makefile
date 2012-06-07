@@ -22,7 +22,8 @@ CHROOT=$(OUT)/chroot
 dummy_create_output_dir := $(shell test -d $(OUT) || mkdir -p $(OUT))
 
 # Kernel
-KERNEL_VERSION=3.1
+KERNEL_VERSION=3.4.1
+KERNEL_AUFS_BRANCH=aufs3.4
 
 kernel: $(OUT)/linux.uml
 
@@ -38,7 +39,7 @@ $(OUT)/linux-$(KERNEL_VERSION).tar.bz2:
 	wget -O $@ http://www.kernel.org/pub/linux/kernel/v3.0/linux-$(KERNEL_VERSION).tar.bz2
 
 $(OUT)/aufs3-standalone:
-	git clone -b aufs3.1 git://aufs.git.sourceforge.net/gitroot/aufs/aufs3-standalone.git $(OUT)/aufs3-standalone
+	git clone -b $(KERNEL_AUFS_BRANCH) git://aufs.git.sourceforge.net/gitroot/aufs/aufs3-standalone.git $(OUT)/aufs3-standalone
 
 
 # Chroot and rootfs

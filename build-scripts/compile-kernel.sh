@@ -11,6 +11,10 @@ if [ ! -d fs/aufs ]; then
   cp -av ../aufs3-standalone/Documentation/* Documentation/
   cp -av ../aufs3-standalone/fs/* fs/
   cp -av ../aufs3-standalone/include/linux/aufs_type.h include/linux/
+  
+  # custom patches
+  patch -p1 < ../../kernel/readonly-ubd-fix.patch
+  patch -p1 < ../../kernel/um-pass-through-siginfo.patch
 fi
 make -j$SUBMAKE_JOBS ARCH=um
 

@@ -1,0 +1,276 @@
+diff -uprN -X linux-3.4.1/Documentation/dontdiff -x config.c -x config.tmp linux-3.4.1/arch/um/include/shared/as-layout.h linux-3.4.1-mod/arch/um/include/shared/as-layout.h
+--- linux-3.4.1/arch/um/include/shared/as-layout.h	2012-06-01 10:18:44.000000000 +0300
++++ linux-3.4.1-mod/arch/um/include/shared/as-layout.h	2012-06-07 18:48:21.469563959 +0300
+@@ -60,7 +60,8 @@ extern unsigned long host_task_size;
+ 
+ extern int linux_main(int argc, char **argv);
+ 
+-extern void (*sig_info[])(int, struct uml_pt_regs *);
++struct siginfo;
++extern void (*sig_info[])(int, struct siginfo *si, struct uml_pt_regs *);
+ 
+ #endif
+ 
+diff -uprN -X linux-3.4.1/Documentation/dontdiff -x config.c -x config.tmp linux-3.4.1/arch/um/include/shared/kern_util.h linux-3.4.1-mod/arch/um/include/shared/kern_util.h
+--- linux-3.4.1/arch/um/include/shared/kern_util.h	2012-06-01 10:18:44.000000000 +0300
++++ linux-3.4.1-mod/arch/um/include/shared/kern_util.h	2012-06-07 22:55:35.737822291 +0300
+@@ -9,6 +9,8 @@
+ #include "sysdep/ptrace.h"
+ #include "sysdep/faultinfo.h"
+ 
++struct siginfo;
++
+ extern int uml_exitcode;
+ 
+ extern int ncpus;
+@@ -22,7 +24,7 @@ extern void free_stack(unsigned long sta
+ 
+ extern int do_signal(void);
+ extern void interrupt_end(void);
+-extern void relay_signal(int sig, struct uml_pt_regs *regs);
++extern void relay_signal(int sig, struct siginfo *si, struct uml_pt_regs *regs);
+ 
+ extern unsigned long segv(struct faultinfo fi, unsigned long ip,
+ 			  int is_user, struct uml_pt_regs *regs);
+@@ -33,7 +35,6 @@ extern unsigned int do_IRQ(int irq, stru
+ extern int smp_sigio_handler(void);
+ extern void initial_thread_cb(void (*proc)(void *), void *arg);
+ extern int is_syscall(unsigned long addr);
+-extern void timer_handler(int sig, struct uml_pt_regs *regs);
+ 
+ extern void timer_handler(int sig, struct uml_pt_regs *regs);
+ 
+@@ -60,7 +61,7 @@ extern void syscall_trace(struct uml_pt_
+ extern int singlestepping(void *t);
+ 
+ extern void segv_handler(int sig, struct uml_pt_regs *regs);
+-extern void bus_handler(int sig, struct uml_pt_regs *regs);
++extern void bus_handler(int sig, struct siginfo *si, struct uml_pt_regs *regs);
+ extern void winch(int sig, struct uml_pt_regs *regs);
+ extern void fatal_sigsegv(void) __attribute__ ((noreturn));
+ 
+diff -uprN -X linux-3.4.1/Documentation/dontdiff -x config.c -x config.tmp linux-3.4.1/arch/um/kernel/trap.c linux-3.4.1-mod/arch/um/kernel/trap.c
+--- linux-3.4.1/arch/um/kernel/trap.c	2012-06-01 10:18:44.000000000 +0300
++++ linux-3.4.1-mod/arch/um/kernel/trap.c	2012-06-07 23:30:11.905858447 +0300
+@@ -244,7 +244,7 @@ unsigned long segv(struct faultinfo fi,
+ 	return 0;
+ }
+ 
+-void relay_signal(int sig, struct uml_pt_regs *regs)
++void relay_signal(int sig, struct siginfo *si, struct uml_pt_regs *regs)
+ {
+ 	if (!UPT_IS_USER(regs)) {
+ 		if (sig == SIGBUS)
+@@ -256,14 +256,15 @@ void relay_signal(int sig, struct uml_pt
+ 	arch_examine_signal(sig, regs);
+ 
+ 	current->thread.arch.faultinfo = *UPT_FAULTINFO(regs);
+-	force_sig(sig, current);
++	force_sig_info(sig, si, current);
+ }
+ 
+-void bus_handler(int sig, struct uml_pt_regs *regs)
++void bus_handler(int sig, struct siginfo *si, struct uml_pt_regs *regs)
+ {
+ 	if (current->thread.fault_catcher != NULL)
+ 		UML_LONGJMP(current->thread.fault_catcher, 1);
+-	else relay_signal(sig, regs);
++	else
++		relay_signal(sig, si, regs);
+ }
+ 
+ void winch(int sig, struct uml_pt_regs *regs)
+diff -uprN -X linux-3.4.1/Documentation/dontdiff -x config.c -x config.tmp linux-3.4.1/arch/um/os-Linux/signal.c linux-3.4.1-mod/arch/um/os-Linux/signal.c
+--- linux-3.4.1/arch/um/os-Linux/signal.c	2012-06-01 10:18:44.000000000 +0300
++++ linux-3.4.1-mod/arch/um/os-Linux/signal.c	2012-06-07 23:32:13.693860567 +0300
+@@ -13,18 +13,55 @@
+ #include "kern_util.h"
+ #include "os.h"
+ #include "sysdep/mcontext.h"
++#include "internal.h"
+ 
+-void (*sig_info[NSIG])(int, struct uml_pt_regs *) = {
++static void winch_ignore_siginfo(int sig,
++				 siginfo_t *si,
++				 struct uml_pt_regs *regs)
++{
++	winch(sig, regs);
++}
++
++static void segv_handler_ignore_siginfo(int sig,
++					siginfo_t *si,
++					struct uml_pt_regs *regs)
++{
++	segv_handler(sig, regs);
++}
++
++static void sigio_handler_ignore_siginfo(int sig,
++					 siginfo_t *si,
++					 struct uml_pt_regs *regs)
++{
++	sigio_handler(sig, regs);
++}
++
++static void timer_handler_ignore_siginfo(int sig,
++					 siginfo_t *si,
++					 struct uml_pt_regs *regs)
++{
++	timer_handler(sig, regs);
++}
++
++static void alarm_handler_ignore_siginfo(int sig,
++					 siginfo_t *si,
++					 mcontext_t *mc)
++{
++	alarm_handler(sig, mc);
++}
++
++
++void (*sig_info[NSIG])(int, siginfo_t *, struct uml_pt_regs *) = {
+ 	[SIGTRAP]	= relay_signal,
+ 	[SIGFPE]	= relay_signal,
+ 	[SIGILL]	= relay_signal,
+-	[SIGWINCH]	= winch,
++	[SIGWINCH]	= winch_ignore_siginfo,
+ 	[SIGBUS]	= bus_handler,
+-	[SIGSEGV]	= segv_handler,
+-	[SIGIO]		= sigio_handler,
+-	[SIGVTALRM]	= timer_handler };
++	[SIGSEGV]	= segv_handler_ignore_siginfo,
++	[SIGIO]		= sigio_handler_ignore_siginfo,
++	[SIGVTALRM]	= timer_handler_ignore_siginfo };
+ 
+-static void sig_handler_common(int sig, mcontext_t *mc)
++static void sig_handler_common(int sig, siginfo_t *si, mcontext_t *mc)
+ {
+ 	struct uml_pt_regs r;
+ 	int save_errno = errno;
+@@ -40,7 +77,7 @@ static void sig_handler_common(int sig,
+ 	if ((sig != SIGIO) && (sig != SIGWINCH) && (sig != SIGVTALRM))
+ 		unblock_signals();
+ 
+-	(*sig_info[sig])(sig, &r);
++	(*sig_info[sig])(sig, si, &r);
+ 
+ 	errno = save_errno;
+ }
+@@ -60,7 +97,7 @@ static void sig_handler_common(int sig,
+ static int signals_enabled;
+ static unsigned int signals_pending;
+ 
+-void sig_handler(int sig, mcontext_t *mc)
++void sig_handler(int sig, siginfo_t *si, mcontext_t *mc)
+ {
+ 	int enabled;
+ 
+@@ -72,7 +109,7 @@ void sig_handler(int sig, mcontext_t *mc
+ 
+ 	block_signals();
+ 
+-	sig_handler_common(sig, mc);
++	sig_handler_common(sig, si, mc);
+ 
+ 	set_signals(enabled);
+ }
+@@ -119,7 +156,7 @@ void set_sigstack(void *sig_stack, int s
+ 		panic("enabling signal stack failed, errno = %d\n", errno);
+ }
+ 
+-static void (*handlers[_NSIG])(int sig, mcontext_t *mc) = {
++static void (*handlers[_NSIG])(int sig, siginfo_t *si, mcontext_t *mc) = {
+ 	[SIGSEGV] = sig_handler,
+ 	[SIGBUS] = sig_handler,
+ 	[SIGILL] = sig_handler,
+@@ -128,11 +165,11 @@ static void (*handlers[_NSIG])(int sig,
+ 
+ 	[SIGIO] = sig_handler,
+ 	[SIGWINCH] = sig_handler,
+-	[SIGVTALRM] = alarm_handler
++	[SIGVTALRM] = alarm_handler_ignore_siginfo
+ };
+ 
+ 
+-static void hard_handler(int sig, siginfo_t *info, void *p)
++static void hard_handler(int sig, siginfo_t *si, void *p)
+ {
+ 	struct ucontext *uc = p;
+ 	mcontext_t *mc = &uc->uc_mcontext;
+@@ -161,7 +198,7 @@ static void hard_handler(int sig, siginf
+ 		while ((sig = ffs(pending)) != 0){
+ 			sig--;
+ 			pending &= ~(1 << sig);
+-			(*handlers[sig])(sig, mc);
++			(*handlers[sig])(sig, si, mc);
+ 		}
+ 
+ 		/*
+@@ -273,9 +310,12 @@ void unblock_signals(void)
+ 		 * Deal with SIGIO first because the alarm handler might
+ 		 * schedule, leaving the pending SIGIO stranded until we come
+ 		 * back here.
++		 *
++		 * SIGIO's handler doesn't use siginfo or mcontext,
++		 * so they can be NULL.
+ 		 */
+ 		if (save_pending & SIGIO_MASK)
+-			sig_handler_common(SIGIO, NULL);
++			sig_handler_common(SIGIO, NULL, NULL);
+ 
+ 		if (save_pending & SIGVTALRM_MASK)
+ 			real_alarm_handler(NULL);
+diff -uprN -X linux-3.4.1/Documentation/dontdiff -x config.c -x config.tmp linux-3.4.1/arch/um/os-Linux/skas/process.c linux-3.4.1-mod/arch/um/os-Linux/skas/process.c
+--- linux-3.4.1/arch/um/os-Linux/skas/process.c	2012-06-01 10:18:44.000000000 +0300
++++ linux-3.4.1-mod/arch/um/os-Linux/skas/process.c	2012-06-07 23:31:12.681859505 +0300
+@@ -346,6 +346,7 @@ void userspace(struct uml_pt_regs *regs)
+ 	int err, status, op, pid = userspace_pid[0];
+ 	/* To prevent races if using_sysemu changes under us.*/
+ 	int local_using_sysemu;
++	siginfo_t si;
+ 
+ 	if (getitimer(ITIMER_VIRTUAL, &timer))
+ 		printk(UM_KERN_ERR "Failed to get itimer, errno = %d\n", errno);
+@@ -404,13 +405,17 @@ void userspace(struct uml_pt_regs *regs)
+ 
+ 		if (WIFSTOPPED(status)) {
+ 			int sig = WSTOPSIG(status);
++
++			ptrace(PTRACE_GETSIGINFO, pid, 0, &si);
++
+ 			switch (sig) {
+ 			case SIGSEGV:
+ 				if (PTRACE_FULL_FAULTINFO ||
+ 				    !ptrace_faultinfo) {
+ 					get_skas_faultinfo(pid,
+ 							   &regs->faultinfo);
+-					(*sig_info[SIGSEGV])(SIGSEGV, regs);
++					(*sig_info[SIGSEGV])(SIGSEGV, &si,
++							     regs);
+ 				}
+ 				else handle_segv(pid, regs);
+ 				break;
+@@ -418,14 +423,14 @@ void userspace(struct uml_pt_regs *regs)
+ 			        handle_trap(pid, regs, local_using_sysemu);
+ 				break;
+ 			case SIGTRAP:
+-				relay_signal(SIGTRAP, regs);
++				relay_signal(SIGTRAP, &si, regs);
+ 				break;
+ 			case SIGVTALRM:
+ 				now = os_nsecs();
+ 				if (now < nsecs)
+ 					break;
+ 				block_signals();
+-				(*sig_info[sig])(sig, regs);
++				(*sig_info[sig])(sig, &si, regs);
+ 				unblock_signals();
+ 				nsecs = timer.it_value.tv_sec *
+ 					UM_NSEC_PER_SEC +
+@@ -439,7 +444,7 @@ void userspace(struct uml_pt_regs *regs)
+ 			case SIGFPE:
+ 			case SIGWINCH:
+ 				block_signals();
+-				(*sig_info[sig])(sig, regs);
++				(*sig_info[sig])(sig, &si, regs);
+ 				unblock_signals();
+ 				break;
+ 			default:
