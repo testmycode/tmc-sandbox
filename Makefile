@@ -70,7 +70,7 @@ $(CHROOT)/sbin/tmc-init: $(CHROOT)/var/log/dpkg.log rootfs/tmc-init
 	chmod +x $(CHROOT)/sbin/tmc-init
 
 # Busybox
-BUSYBOX_VERSION=1.19.2
+BUSYBOX_VERSION=1.20.1
 BUSYBOX_INSTALL_DIR=$(OUT)/busybox-$(BUSYBOX_VERSION)/_install
 busybox: $(BUSYBOX_INSTALL_DIR)/bin/busybox
 
