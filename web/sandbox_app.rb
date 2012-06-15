@@ -175,10 +175,9 @@ class SandboxApp
           if process_status == :timeout
             :timeout
           elsif process_status.success?
-            exit_code = `tar --to-stdout -xf #{output_tar_path} exit_code.txt 2>/dev/null`
-            if $?.success?
-              exit_code = exit_code.to_i
-            else
+            begin
+              exit_code = extract_file_from_tar(output_tar_path, 'exit_code.txt').to_i
+            rescue
               SandboxApp.debug_log.warn "Failed to untar exit_code.txt"
               exit_code = nil
             end
@@ -193,8 +192,12 @@ class SandboxApp
           end
         
         SandboxApp.debug_log.debug "Status: #{status}. Exit code: #{exit_code.inspect}."
-        output = `tar --to-stdout -xf #{output_tar_path} output.txt 2>/dev/null`
-        output = "" if !$?.success?
+
+        output = {
+          'test_output' => try_extract_file_from_tar(output_tar_path, 'test_output.txt'),
+          'stdout' => try_extract_file_from_tar(output_tar_path, 'stdout.txt'),
+          'stderr' => try_extract_file_from_tar(output_tar_path, 'stderr.txt')
+        }
         
         @notifier.send_notification(status, exit_code, output) if @notifier
       end
@@ -229,6 +232,20 @@ class SandboxApp
       FileUtils.rm_rf work_dir
       FileUtils.mkdir_p work_dir
     end
+
+    def extract_file_from_tar(tar_path, file_name)
+      result = `tar --to-stdout -xf #{output_tar_path} #{file_name} 2>/dev/null`
+      raise "Failed to extract #{file_name} from #{tar_path}" if !$?.success?
+      result
+    end
+
+    def try_extract_file_from_tar(tar_path, file_name)
+      begin
+        extract_file_from_tar(tar_path, file_name)
+      rescue
+        ""
+      end
+    end
   end
   
   
@@ -239,11 +256,10 @@ class SandboxApp
     end
     
     def send_notification(status, exit_code, output)
-      postdata = {
+      postdata = output.merge({
         'token' => @token,
-        'status' => status.to_s,
-        'output' => output
-      }
+        'status' => status.to_s
+      })
       postdata['exit_code'] = exit_code if exit_code != nil
 
       SandboxApp.debug_log.debug "Notifying #{@url}"

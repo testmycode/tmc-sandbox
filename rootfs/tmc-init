@@ -41,11 +41,29 @@ else
   echo "Completed tmc-run. Exit code: $EXIT_CODE"
 fi
 
+summarize_text_file() {
+  [ -e $1 ] || touch $1
+  LINES=`cat $1 | wc -l`
+  if [ $LINES -gt 1000 ]; then
+    head -n 500 $1 > "$1.head"
+    tail -n 500 $1 > "$1.tail"
+    cat "$1.head" > $1
+    echo "..." >> $1
+    echo "..." >> $1
+    echo "..." >> $1
+    cat "$1.tail" >> $1
+    rm -f "$1.head" "$1.tail"
+  fi
+}
+
 # Write the result
-# TODO: could simplify delivering the exit code by putting it in /proc/exitcode
-[ -e output.txt ] || touch output.txt
+[ -e test_output.txt ] || touch test_output.txt
+summarize_text_file stdout.txt
+summarize_text_file stderr.txt
+
 echo $EXIT_CODE > exit_code.txt
-tar c output.txt exit_code.txt > $OUTPUT_FILE
+
+tar c test_output.txt exit_code.txt stdout.txt stderr.txt > $OUTPUT_FILE
 
 # Shut down
 echo "Shutting down..."

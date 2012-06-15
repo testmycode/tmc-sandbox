@@ -36,7 +36,7 @@ class WebappTest < Test::Unit::TestCase
     assert_equal '123123', @notify_params['token']
     assert_equal 'finished', @notify_params['status']
     assert_equal '0', @notify_params['exit_code']
-    assert_equal 'this is the output.txt of fixtures/successful', @notify_params['output'].strip
+    assert_equal 'this is the test_output.txt of fixtures/successful', @notify_params['test_output'].strip
   end
   
   def test_can_respond_to_multiple_requests
@@ -49,7 +49,7 @@ class WebappTest < Test::Unit::TestCase
     assert_equal '456456', @notify_params['token']
     assert_equal 'finished', @notify_params['status']
     assert_equal '0', @notify_params['exit_code']
-    assert_equal 'this is the output.txt of fixtures/successful', @notify_params['output'].strip
+    assert_equal 'this is the test_output.txt of fixtures/successful', @notify_params['test_output'].strip
   end
   
   def test_post_responds_busy_when_previous_task_running
@@ -88,7 +88,7 @@ class WebappTest < Test::Unit::TestCase
     assert_equal '123123', @notify_params['token']
     assert_equal 'failed', @notify_params['status']
     assert_equal '42', @notify_params['exit_code']
-    assert_equal 'this is the output.txt of fixtures/unsuccessful_with_output', @notify_params['output'].strip
+    assert_equal 'this is the test_output.txt of fixtures/unsuccessful_with_output', @notify_params['test_output'].strip
   end
 
 private

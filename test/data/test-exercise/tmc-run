@@ -9,10 +9,10 @@ DEFS="-Dtmc.exercise_dir=`pwd`
   -Dtmc.src_class_dir=`pwd`/classes/main 
   -Dtmc.test_class_dir=`pwd`/classes/test
   -Dtmc.lib_dir=`pwd`/lib
-  -Dtmc.results_file=`pwd`/output.txt"
+  -Dtmc.results_file=`pwd`/test_output.txt"
 
 TESTS="MainTest.testStuff{1.1}"
 
-java -cp lib/*:classes/main/:classes/test/ $DEFS "fi.helsinki.cs.tmc.testrunner.Main" $TESTS
+java -cp lib/*:classes/main/:classes/test/ $DEFS "fi.helsinki.cs.tmc.testrunner.Main" $TESTS > stdout.txt 2> stderr.txt
 
 exit 0

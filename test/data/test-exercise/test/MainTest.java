@@ -7,7 +7,9 @@ public class MainTest {
 
     @Test
     public void testStuff() {
+        System.out.println("Test method starting");
         assertEquals(2, Main.f(1, 1));
         assertEquals(7, Main.f(3, 4));
+        System.out.println("Test method ending");
     }  
 }
