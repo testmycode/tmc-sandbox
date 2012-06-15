@@ -1,6 +1,6 @@
 diff -uprN -X linux-3.4.1/Documentation/dontdiff -x config.c -x config.tmp linux-3.4.1/arch/um/include/shared/as-layout.h linux-3.4.1-mod/arch/um/include/shared/as-layout.h
 --- linux-3.4.1/arch/um/include/shared/as-layout.h	2012-06-01 10:18:44.000000000 +0300
-+++ linux-3.4.1-mod/arch/um/include/shared/as-layout.h	2012-06-07 18:48:21.469563959 +0300
++++ linux-3.4.1-mod/arch/um/include/shared/as-layout.h	2012-06-15 13:55:32.817111341 +0300
 @@ -60,7 +60,8 @@ extern unsigned long host_task_size;
  
  extern int linux_main(int argc, char **argv);
@@ -13,7 +13,7 @@ diff -uprN -X linux-3.4.1/Documentation/dontdiff -x config.c -x config.tmp linux
  
 diff -uprN -X linux-3.4.1/Documentation/dontdiff -x config.c -x config.tmp linux-3.4.1/arch/um/include/shared/kern_util.h linux-3.4.1-mod/arch/um/include/shared/kern_util.h
 --- linux-3.4.1/arch/um/include/shared/kern_util.h	2012-06-01 10:18:44.000000000 +0300
-+++ linux-3.4.1-mod/arch/um/include/shared/kern_util.h	2012-06-07 22:55:35.737822291 +0300
++++ linux-3.4.1-mod/arch/um/include/shared/kern_util.h	2012-06-15 13:55:32.817111341 +0300
 @@ -9,6 +9,8 @@
  #include "sysdep/ptrace.h"
  #include "sysdep/faultinfo.h"
@@ -51,22 +51,49 @@ diff -uprN -X linux-3.4.1/Documentation/dontdiff -x config.c -x config.tmp linux
  
 diff -uprN -X linux-3.4.1/Documentation/dontdiff -x config.c -x config.tmp linux-3.4.1/arch/um/kernel/trap.c linux-3.4.1-mod/arch/um/kernel/trap.c
 --- linux-3.4.1/arch/um/kernel/trap.c	2012-06-01 10:18:44.000000000 +0300
-+++ linux-3.4.1-mod/arch/um/kernel/trap.c	2012-06-07 23:30:11.905858447 +0300
-@@ -244,7 +244,7 @@ unsigned long segv(struct faultinfo fi,
++++ linux-3.4.1-mod/arch/um/kernel/trap.c	2012-06-15 19:56:16.549060996 +0300
+@@ -244,8 +244,11 @@ unsigned long segv(struct faultinfo fi,
  	return 0;
  }
  
 -void relay_signal(int sig, struct uml_pt_regs *regs)
 +void relay_signal(int sig, struct siginfo *si, struct uml_pt_regs *regs)
  {
++	struct faultinfo *fi;
++	struct siginfo clean_si;
++
  	if (!UPT_IS_USER(regs)) {
  		if (sig == SIGBUS)
-@@ -256,14 +256,15 @@ void relay_signal(int sig, struct uml_pt
+ 			printk(KERN_ERR "Bus error - the host /dev/shm or /tmp "
+@@ -255,15 +258,37 @@ void relay_signal(int sig, struct uml_pt
+ 
  	arch_examine_signal(sig, regs);
  
- 	current->thread.arch.faultinfo = *UPT_FAULTINFO(regs);
+-	current->thread.arch.faultinfo = *UPT_FAULTINFO(regs);
 -	force_sig(sig, current);
-+	force_sig_info(sig, si, current);
++	memset(&clean_si, 0, sizeof(clean_si));
++	clean_si.si_signo = si->si_signo;
++	clean_si.si_errno = si->si_errno;
++	clean_si.si_code = si->si_code;
++	switch (sig) {
++	case SIGILL:
++	case SIGFPE:
++	case SIGSEGV:
++	case SIGBUS:
++	case SIGTRAP:
++		fi = UPT_FAULTINFO(regs);
++		clean_si.si_addr = (void __user *) FAULT_ADDRESS(*fi);
++		current->thread.arch.faultinfo = *fi;
++#ifdef __ARCH_SI_TRAPNO
++		clean_si.si_trapno = si->si_trapno;
++#endif
++		break;
++	default:
++		printk(KERN_ERR "Attempted to relay unknown signal %d (si_code = %d)\n",
++			sig, si->si_code);
++	}
++
++	force_sig_info(sig, &clean_si, current);
  }
  
 -void bus_handler(int sig, struct uml_pt_regs *regs)
@@ -82,7 +109,7 @@ diff -uprN -X linux-3.4.1/Documentation/dontdiff -x config.c -x config.tmp linux
  void winch(int sig, struct uml_pt_regs *regs)
 diff -uprN -X linux-3.4.1/Documentation/dontdiff -x config.c -x config.tmp linux-3.4.1/arch/um/os-Linux/signal.c linux-3.4.1-mod/arch/um/os-Linux/signal.c
 --- linux-3.4.1/arch/um/os-Linux/signal.c	2012-06-01 10:18:44.000000000 +0300
-+++ linux-3.4.1-mod/arch/um/os-Linux/signal.c	2012-06-07 23:32:13.693860567 +0300
++++ linux-3.4.1-mod/arch/um/os-Linux/signal.c	2012-06-15 13:55:32.817111341 +0300
 @@ -13,18 +13,55 @@
  #include "kern_util.h"
  #include "os.h"
@@ -220,7 +247,7 @@ diff -uprN -X linux-3.4.1/Documentation/dontdiff -x config.c -x config.tmp linux
  			real_alarm_handler(NULL);
 diff -uprN -X linux-3.4.1/Documentation/dontdiff -x config.c -x config.tmp linux-3.4.1/arch/um/os-Linux/skas/process.c linux-3.4.1-mod/arch/um/os-Linux/skas/process.c
 --- linux-3.4.1/arch/um/os-Linux/skas/process.c	2012-06-01 10:18:44.000000000 +0300
-+++ linux-3.4.1-mod/arch/um/os-Linux/skas/process.c	2012-06-07 23:31:12.681859505 +0300
++++ linux-3.4.1-mod/arch/um/os-Linux/skas/process.c	2012-06-15 13:56:58.261111142 +0300
 @@ -346,6 +346,7 @@ void userspace(struct uml_pt_regs *regs)
  	int err, status, op, pid = userspace_pid[0];
  	/* To prevent races if using_sysemu changes under us.*/
