@@ -155,7 +155,7 @@ class SandboxApp
         `dd if=/dev/zero of=#{output_tar_path} bs=#{@settings['max_output_size']} count=1`
         exit!(1) unless $?.success?
         
-        cmd = Shellwords.join([
+        args = [
           "#{kernel_path}",
           "initrd=#{initrd_path}",
           "ubdarc=#{rootfs_path}",
@@ -163,7 +163,14 @@ class SandboxApp
           "ubdc=#{output_tar_path}",
           "mem=#{@settings['instance_ram']}",
           "con=null"
-        ])
+        ]
+        if @settings['extra_uml_args'].is_a?(Enumerable)
+          args += @settings['extra_uml_args']
+        else
+          args << @settings['extra_uml_args']
+        end
+        
+        cmd = Shellwords.join(args)
         
         SandboxApp.debug_log.debug "PID #{Process.pid} executing: #{cmd}"
         Process.exec(cmd)

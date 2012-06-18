@@ -31,6 +31,13 @@ max_output_size: 20M
 timeout: 120
 
 #
+# Extra parameters to user-mode-linux.
+# Can be used e.g. to configure virtual networks.
+# If you want to give many parameters then make them as a YAML array.
+#
+extra_uml_args:
+
+#
 # A log file with debug information.
 #
 debug_log_file:
