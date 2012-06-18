@@ -8,6 +8,12 @@ require 'fileutils'
 class SandboxManager
 
   class BaseConfig
+    def initialize(port)
+        @port = port
+    end
+    
+    attr_reader :port
+    
     def sandbox_files_path
       './tmc-sandbox/output'
     end
@@ -27,15 +33,18 @@ class SandboxManager
   
   
   class Instance
-    def initialize(config, port)
+    def initialize(config)
       @config = config
-      @port = port
     end
     
     attr_reader :config, :port
     
+    def port
+      @config.port
+    end
+    
     def dir
-      @port
+      port
     end
     
     def pidfile
@@ -120,26 +129,25 @@ class SandboxManager
   
   def initialize(args)
     parse_args(args)
-    load_config
   end
   
   
   def execute
     Lockfile.new('manage-sandboxes.lock') do
-      simple_commands = ['create', 'rebuild', 'destroy', 'start', 'stop', 'restart']
+      simple_commands = ['create', 'rebuild', 'destroy', 'start', 'start!', 'stop', 'restart']
+      
+      if @command == 'onboot'
+        @command = 'start!'
+        ports = all_ports
+      else
+        ports = optionally_args_as_ports
+      end
       
       if simple_commands.include?(@command)
-        ports = optionally_args_as_ports
-        instances = ports.map {|port| Instance.new(@config, port) }
+        instances = ports.map {|port| Instance.new(load_config(port)) }
         instances.each do |instance|
           puts "#{@command} #{instance.port}"
           instance.send(@command)
-        end
-      elsif @command == 'onboot'
-        instances = all_ports.map {|port| Instance.new(@config, port) }
-        instances.each do |instance|
-          puts "start! #{instance.port}"
-          instance.start!
         end
       else
         raise "Unknown command: #{@command}"
@@ -184,15 +192,15 @@ private
     end
   end
   
-  def load_config
+  def load_config(port)
     if !@config_file && File.exist?('config.rb')
       @config_file = 'config.rb'
     end
     if @config_file
       require @config_file
-      @config = SandboxManagerConfig.new
+      SandboxManagerConfig.new(port)
     else
-      @config = BaseConfig.new
+      BaseConfig.new(port)
     end
   end
 
