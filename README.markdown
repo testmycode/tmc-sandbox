@@ -49,7 +49,113 @@ to the notify URL with the following JSON object:
 Only one task may run per instance of this webservice.
 If it is busy, it responds with a HTTP 500 and a JSON object `{status: 'busy'}`.
 Multiple instances should be deployed to separate directories under separate URLs.
-They may, however, share the same rootfs image file.
+They may, however, share the same kernel, initrd and rootfs files.
 
-Authentication and encryption should be configured into the web server as usual.
+Authentication and encryption may be configured into the web server if desired.
 
+## Network setup ##
+
+Usermode Linux boxes can be connected to virtual network devices (TUN/TAP interfaces).
+We'll show how to set up basic networking, DNS forwarding and an HTTP proxy manually.
+In this setup the sandboxes will only be able to access the HTTP proxy and nothing else.
+The proxy can be configured to restrict traffic further.
+Here is an outline of the setup:
+
+- On the host:
+    - Set up TAP device(s).
+    - Connect the sandbox(es) use the TAP device(s).
+    - Set up dnsmasq for each TAP device.
+    - Set up a [http://www.squid-cache.org/ squid] proxy for each TAP device.
+    - Set up the squid proxy's ACL settings.
+
+- In the sandbox:
+    - Set up network interface and resolv.conf.
+    - Set global proxy settings: `http_proxy` and Java's proxy settings.
+
+Some assumptions, adjust as needed:
+
+- 192.168.88.* is a free local IP range.
+- The user account running the sandboxes is `tmc`.
+
+Let's create a TAP interface named `tap_tmc0` and assign it to the 192.168.88.* subnet.
+
+    ip tuntap add dev tap_tmc0 mode tap user tmc
+    ifconfig tap_tmc0 192.168.88.1 up
+    # ifconfig tap_tmc0 arp mtu 1484 192.168.88.1 up # TODO: Or this??
+
+These can be configured above to run on bootup, or with a distro-specific network configuration.
+The following is an example for Debian's `/etc/network/interfaces`
+
+    auto tap_tmc0
+    iface tap_tmc0 inet static
+        address 192.168.88.1
+        netmask 255.255.255.0
+        pre-up ip tuntap add dev tap_tmc0 mode tap user tmc
+        post-down ip tuntap del dev tap_tmc0 mode tap
+
+Now the sandbox's `eth0` can be bound to `tap_tmc0` with the following command line parameter:
+
+    eth0=tuntap,tap_tmc0,,192.168.88.1
+
+If you use the sandbox's web interface then set the following in `site.yml`:
+
+    extra_uml_args: eth0=tuntap,tap_tmc0,,192.168.88.1
+
+If you manage multiple sandboxes then you'll probably want to give each sandbox its own tap device
+and subnet. If you use the script under `management/` then this can be done by programming the
+configuration object in `config.rb` to return an `extra_uml_args` based on the given port number.
+
+Inside the UML the default tmc-init script will recognize the above command line argument and
+do approximately the following setup:
+
+    ifconfig eth0 192.168.88.2 up
+    route add -host 192.168.88.2 gw 192.168.88.1
+    echo "nameserver 192.168.88.1" > /etc/resolv.conf
+    export http_proxy="http://192.168.88.1:3128"
+    echo "http.proxyHost=192.168.88.1" >> /etc/java-6-openjdk/net.properties
+    echo "http.proxyPort=3128" >> /etc/java-6-openjdk/net.properties
+
+The init script infers the appropriate subnet (here 192.168.88.*) from the CLI option.
+Also, the script writes an appropriate settings.xml for maven.
+
+Now we could e.g. set up a firewall to forward (limited) traffic from the tun/tap device to the internet.
+Instead we'll keep the networks separated and make all communication go through an HTTP proxy. Before
+that, however, we'll need to give the sandbox access to DNS.
+
+### dnsmasq ###
+
+Dnsmasq is an easy to set up DNS forwarder and DHCP server. We only want it to
+handle DNS requests on our tap device, since since we don't want to route stuff
+to the real network. We can configure dnsmasq simply like this:
+
+    interface=tap_tmc0
+    no-dhcp-interface=tap_tmc0
+
+These lines may be repeated for all tap devices.
+Alternatively an empty configuration will also work but be somewhat
+less secure as it will handle all DNS and DHCP from all interfaces.
+
+### Squid proxy ###
+
+We assume [http://www.squid-cache.org/ Squid] 3.x is installed.
+We'll configure it to listen to the tap interface(s) and forward requests
+to select addresses on the internet. Set `http_port` to `192.168.88.1:3128`.
+You may repeat this line to support multiple sandboxes.
+
+Look into the `acl` and `http_access` options to configure access limitations.
+Some distributions have rather restrictive defaults preconfigured.
+
+If you're caching maven, then you should set up a large disk cache.
+The disk cache size is specified as part of `cache_dir`.
+Also set `maximum_object_size` to something pretty big or else large
+maven downloads might not get cached.
+Other important cache size options include `cache_mem` and
+`maximum_object_size_in_memory`,
+
+### Summary ###
+
+TODO
+
+To test your setup with a Maven project, run TODO.
+
+TODO: mavenize TMC libraries, possibly into a custom repo

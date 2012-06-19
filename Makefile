@@ -21,9 +21,10 @@ CHROOT=$(OUT)/chroot
 
 dummy_create_output_dir := $(shell test -d $(OUT) || mkdir -p $(OUT))
 
-# Kernel
+# Version numbers
 KERNEL_VERSION=3.4.1
 KERNEL_AUFS_BRANCH=aufs3.4
+MAVEN_VERSION=3.0.4
 
 kernel: $(OUT)/linux.uml
 
@@ -53,7 +54,7 @@ $(OUT)/rootfs.squashfs: chroot
 	mksquashfs $(CHROOT) $@ -all-root -noappend -e var/cache/apt $(SQUASHFS_EXTRA_OPTS)
 	chmod a+r $@
 
-chroot: $(CHROOT)/var/log/dpkg.log $(CHROOT)/sbin/tmc-init
+chroot: $(CHROOT)/var/log/dpkg.log $(CHROOT)/sbin/tmc-init maven
 
 $(OUT)/multistrap.conf: rootfs/multistrap.conf.in
 	sed 's/__ARCH__/$(ARCH)/' < $< > $@
@@ -68,6 +69,27 @@ $(CHROOT)/var/log/dpkg.log: $(OUT)/multistrap.conf
 $(CHROOT)/sbin/tmc-init: $(CHROOT)/var/log/dpkg.log rootfs/tmc-init
 	cp rootfs/tmc-init $(CHROOT)/sbin/tmc-init
 	chmod +x $(CHROOT)/sbin/tmc-init
+
+# Maven
+maven: $(CHROOT)/usr/local/bin/mvn $(CHROOT)/opt/maven $(CHROOT)/etc/maven-settings.template.xml
+
+$(CHROOT)/usr/local/bin/mvn: $(CHROOT)/opt/apache-maven-$(MAVEN_VERSION)/bin/mvn
+	rm -f $@
+	cd $(CHROOT)/usr/local/bin && ln -sf /opt/apache-maven-$(MAVEN_VERSION)/bin/mvn
+
+$(CHROOT)/opt/apache-maven-$(MAVEN_VERSION)/bin/mvn: $(OUT)/apache-maven-$(MAVEN_VERSION)-bin.tar.gz
+	tar -C $(CHROOT)/opt -xvzf $<
+	touch $@ # Update timestamp for make
+
+$(OUT)/apache-maven-$(MAVEN_VERSION)-bin.tar.gz:
+	wget -O $@ http://www.nic.funet.fi/pub/mirrors/apache.org/maven/binaries/apache-maven-$(MAVEN_VERSION)-bin.tar.gz
+
+$(CHROOT)/opt/maven: $(CHROOT)/opt/apache-maven-$(MAVEN_VERSION)
+	rm -f $@
+	cd $(CHROOT)/opt && ln -s apache-maven-$(MAVEN_VERSION) maven
+
+$(CHROOT)/etc/maven-settings.template.xml: rootfs/maven-settings.template.xml
+	cp -f $< $@
 
 # Busybox
 BUSYBOX_VERSION=1.20.1
