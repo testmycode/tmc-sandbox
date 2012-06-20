@@ -166,7 +166,7 @@ class SandboxApp
         ]
         if @settings['extra_uml_args'].is_a?(Enumerable)
           args += @settings['extra_uml_args']
-        else
+        elsif @settings['extra_uml_args'].is_a?(String)
           args << @settings['extra_uml_args']
         end
         
