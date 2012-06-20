@@ -13,12 +13,7 @@ sandbox_files_root: ../output
 # About 20M of this is used by the virtualized environment.
 # Program output must also fit here.
 #
-# It's OK to overcommit this a little so that the maximum number of
-# concurrent processes may cause a little swapping in the worst case.
-# A virtualized instance won't actually reserve all of
-# it's memory allocation unless it needs to.
-#
-instance_ram: 96M
+instance_ram: 128M
 
 #
 # The maximum output.txt size accepted.
