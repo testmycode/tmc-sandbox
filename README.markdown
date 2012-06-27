@@ -53,6 +53,8 @@ They may, however, share the same kernel, initrd and rootfs files.
 
 Authentication and encryption may be configured into the web server if desired.
 
+Tests may be run by doing `rake test` under `web/`. It requires `e2fsprogs` and `e2tools` (i.e. ext2 stuff) to be installed.
+
 ## Network setup ##
 
 Usermode Linux boxes can be connected to virtual network devices (TUN/TAP interfaces).

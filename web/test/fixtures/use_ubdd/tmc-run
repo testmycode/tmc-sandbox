@@ -1,0 +1,4 @@
+#!/bin/sh -e
+echo "foo" > /ubdd/hello.txt # It should be writable (AUFS ramdisk)
+ls -a /ubdd > test_output.txt
+exit 0

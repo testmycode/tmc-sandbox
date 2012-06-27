@@ -164,6 +164,13 @@ class SandboxApp
           "mem=#{@settings['instance_ram']}",
           "con=null"
         ]
+        if @settings['extra_image_ubdd']
+          ubdd = @settings['extra_image_ubdd']
+          args << "ubddrc=#{ubdd}"
+          SandboxApp.debug_log.debug "Using #{ubdd} as ubdd"
+          ubdd_file = File.open(ubdd, File::RDONLY)
+          ubdd_file.flock(File::LOCK_SH) # Released when UML exits
+        end
         if @settings['extra_uml_args'].is_a?(Enumerable)
           args += @settings['extra_uml_args']
         elsif @settings['extra_uml_args'].is_a?(String)

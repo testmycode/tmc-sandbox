@@ -13,6 +13,7 @@ WORKDIR=/tmc
 [ -e /dev/ubda ] || mknod /dev/ubda b 98 0
 [ -e /dev/ubdb ] || mknod /dev/ubdb b 98 16
 [ -e /dev/ubdc ] || mknod /dev/ubdc b 98 32
+[ -e /dev/ubdd ] || mknod /dev/ubdd b 98 48
 
 # Mount /proc and /sys
 mount -t proc proc /proc
@@ -29,6 +30,16 @@ tar xf $EXERCISE_TAR
 useradd --system tmc
 chown -R tmc $WORKDIR
 chmod -R u+rX $WORKDIR
+
+# Mount ubdd if requested
+if `cat /proc/cmdline | grep -E -q ubdd[rc]?[rc]?=`; then
+  echo "Mounting /ubdd"
+  mkdir -p /mnt/ubdd_ro /mnt/ubdd_rw /ubdd
+  mount -o ro /dev/ubdd /mnt/ubdd_ro
+  mount -t tmpfs -o rw,size=64M none /mnt/ubdd_rw # This is necessary since aufs can't use another aufs as a write branch
+  mount -t aufs -o rw,br=/mnt/ubdd_rw:/mnt/ubdd_ro aufs /ubdd
+  chown tmc /ubdd
+fi
 
 # Set up networking, if enabled
 if `cat /proc/cmdline | grep -E -q 'eth0=tuntap'`; then

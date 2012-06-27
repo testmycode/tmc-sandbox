@@ -37,3 +37,10 @@ extra_uml_args:
 #
 debug_log_file:
 
+#
+# An extra image file may be attached as ubdd.
+# If specified, it is mounted to /ubdd as AUFS read-only + writable RAMdisk,
+# like the root filesystem. The file will be non-exclusively flock()'ed while in use.
+#
+extra_image_ubdd:
+
