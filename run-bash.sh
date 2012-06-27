@@ -18,7 +18,7 @@ cd ..
 MAX_OUTPUT_SIZE=20M
 dd if=/dev/zero of=tmp/output.tar bs=$MAX_OUTPUT_SIZE count=1
 
-MEM=${MEM-96M}
+MEM=${MEM-256M}
 
 output/linux.uml \
   initrd=output/initrd.img \

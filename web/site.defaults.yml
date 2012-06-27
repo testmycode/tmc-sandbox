@@ -13,7 +13,7 @@ sandbox_files_root: ../output
 # About 20M of this is used by the virtualized environment.
 # Program output must also fit here.
 #
-instance_ram: 128M
+instance_ram: 256M
 
 #
 # The maximum output.txt size accepted.
