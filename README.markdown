@@ -57,6 +57,8 @@ Tests may be run by doing `rake test` under `web/`. It requires `e2fsprogs` and 
 
 ## Network setup ##
 
+TODO: first tell about the easy way: manage-tap-devs.
+
 Usermode Linux boxes can be connected to virtual network devices (TUN/TAP interfaces).
 We'll show how to set up basic networking, DNS forwarding and an HTTP proxy manually.
 In this setup the sandboxes will only be able to access the HTTP proxy and nothing else.

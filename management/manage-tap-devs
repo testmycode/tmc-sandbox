@@ -15,12 +15,19 @@ empty lines in between.
 The parts of the file that the script doesn't modify
 are preserved.
 
+Use --dnsmasq to also add/remove interface= and no-dhcp-interface= lines in
+/etc/dnsmasq.conf.
+
+Use --squid to also add/remove http_port <ipaddress>:3128 lines in
+/etc/squid3/squid.conf.
+
+
 Usage:
 
   manage-tap-devs add <tapN> <internal-ip> <tmc-user>
     Adds a tap device to /etc/network/interfaces unless it's already there.
   
-  manage-tap-devs del <tapN>
+  manage-tap-devs del <tapN> <internal-ip>
     Removes a tap device from /etc/network/interfaces if it's there.
   
   manage-tap-devs up <tapN>
@@ -30,26 +37,55 @@ Usage:
     Brings a configured tap device down.
   
 Options:
-  -p, --pretend      Don't really write conf file or alter interfaces.
+  -p, --pretend      Don't really write conf files.
+                     Show diff of what would be done.
   -h, --help         This.
+  
+  --dnsmasq          Also configure [add/del] dnsmasq but don't restart it.
+  --squid            Also configure [add/del] squid but don't restart it.
 
 EOS
 
 
+module LineBasedFile
+  # Includer must have DEFAULT_FILE constant
+
+  def self.included(target)
+    target.class_eval do
+      def initialize(path, data)
+        @path = path
+        data = data.gsub("\r", "") # Just in case
+        @lines = data.split("\n")
+        @lines << "" if @lines.empty? # so .first and .last always work
+      end
+      
+      attr_reader :path
+      
+      def data
+        @lines.join("\n")
+      end
+      
+      def self.load(path = self::DEFAULT_FILE)
+        self.new(path, File.read(path))
+      end
+      
+      def save
+        File.open(path, 'wb') {|f| f.write(data) }
+      end
+      
+      def backup
+        FileUtils.cp(path, path + '.bak')
+      end
+    end
+  end
+end
+
+
 class InterfacesFile
   DEFAULT_FILE = '/etc/network/interfaces'
-
-  def initialize(data)
-    data = data.gsub("\r", "") # Just in case
-    @lines = data.split("\n")
-    @lines << "" if @lines.empty? # so .first and .last always work
-  end
+  include LineBasedFile
   
-  def data
-    @lines.join("\n")
-  end
-  
-  def iface_exists?(iface)
+  def iface_exists?(iface, ipaddr)
     !!find_iface_lines(iface)
   end
   
@@ -64,7 +100,7 @@ class InterfacesFile
     @lines << ""
   end
   
-  def remove_iface(iface)
+  def remove_iface(iface, ipaddr)
     iface_lines = find_iface_lines(iface)
     @lines.slice!(iface_lines) if iface_lines != nil
     
@@ -89,18 +125,6 @@ class InterfacesFile
 
     @lines << "" if @lines.empty?
     @lines << "" if !@lines.last.strip.empty?
-  end
-  
-  def self.load(path = DEFAULT_FILE)
-    InterfacesFile.new(File.read(path))
-  end
-  
-  def save(path = DEFAULT_FILE)
-    File.open(path, 'wb') {|f| f.write(data) }
-  end
-  
-  def backup(path = DEFAULT_FILE)
-    FileUtils.cp(path, path + '.bak')
   end
 
 private
@@ -128,24 +152,128 @@ private
 end
 
 
-class TapDevManager
-  def initialize(pretend)
-    @pretend = pretend
-    @iffile = InterfacesFile.load
+class DnsmasqFile
+  DEFAULT_FILE = '/etc/dnsmasq.conf'
+  include LineBasedFile
+  
+  def iface_exists?(iface, ipaddr)
+    @lines.any? {|line| line =~ iface_regex_for(iface) }
   end
+  
+  def add_tap_iface(iface, ipaddr, tmc_user)
+    iface_regex = iface_regex_for(iface)
+    nodhcp_regex = nodhcp_regex_for(iface)
+    
+    if !@lines.any? {|line| line =~ iface_regex }
+      @lines << "interface=#{iface}"
+    end
+    if !@lines.any? {|line| line =~ nodhcp_regex }
+      @lines << "no-dhcp-interface=#{iface}"
+    end
+    
+    @lines << "" if !@lines.last.strip.empty?
+  end
+  
+  def remove_iface(iface, ipaddr)
+    iface_regex = iface_regex_for(iface)
+    nodhcp_regex = nodhcp_regex_for(iface)
+    
+    @lines.map! do |line|
+      if line =~ iface_regex || line =~ nodhcp_regex
+        nil
+      else
+        line
+      end
+    end.reject!(&:nil?)
+    
+    @lines << "" if !@lines.last.strip.empty?
+  end
+  
+private
+  def iface_regex_for(iface)
+    /^\s*interface\s*=\s*#{iface}/
+  end
+  
+  def nodhcp_regex_for(iface)
+    /^\s*no-dhcp-interface\s*=\s*#{iface}/
+  end
+end
 
-  def add(tapdev, internal_ip, tmc_user)
-    if !@iffile.iface_exists?(tapdev)
-      @iffile.add_tap_iface(tapdev, internal_ip, tmc_user)
-      maybe_save
-    else
-      puts "Interface #{tapdev} already configured. Not doing anything."
+
+class SquidFile
+  DEFAULT_FILE = '/etc/squid3/squid.conf'
+  include LineBasedFile
+  
+  def port
+    3128
+  end
+  
+  def iface_exists?(iface, ipaddr)
+    regex = http_port_regex_for(ipaddr)
+    @lines.any? {|line| line =~ regex }
+  end
+  
+  def add_tap_iface(iface, ipaddr, tmc_user)
+    if !iface_exists?(iface, ipaddr)
+      @lines << "http_port #{ipaddr}:#{port}"
+    end
+    
+    @lines << "" if !@lines.last.strip.empty?
+  end
+  
+  def remove_iface(iface, ipaddr)
+    regex = http_port_regex_for(ipaddr)
+    @lines.map! do |line|
+      if line =~ regex
+        nil
+      else
+        line
+      end
+    end.reject!(&:nil?)
+    
+    @lines << "" if !@lines.last.strip.empty?
+  end
+  
+private
+  def http_port_regex_for(ipaddr)
+    /^\s*http_port\s*#{ipaddr}:#{port}/
+  end
+end
+
+
+class TapDevManager
+  def initialize(options = {})
+    @options = {
+      :pretend => false,
+      :dnsmasq => false,
+      :squid => false
+    }.merge(options)
+    @interfaces_file = InterfacesFile.load
+    @dnsmasq_file = DnsmasqFile.load if @options[:dnsmasq]
+    @squid_file = SquidFile.load if @options[:squid]
+  end
+  
+  def pretend?
+    @options[:pretend]
+  end
+  
+  def add(tapdev, ipaddr, tmc_user)
+    for file in files
+      if !file.iface_exists?(tapdev, ipaddr)
+        puts "Adding #{tapdev} #{ipaddr} to #{file.path}"
+        file.add_tap_iface(tapdev, ipaddr, tmc_user)
+        maybe_save(file)
+      else
+        puts "#{tapdev} #{ipaddr} already configured in #{file.path}"
+      end
     end
   end
   
-  def del(tapdev)
-    @iffile.remove_iface(tapdev)
-    maybe_save
+  def del(tapdev, ipaddr)
+    for file in files
+      file.remove_iface(tapdev, ipaddr)
+      maybe_save(file)
+    end
   end
   
   def up(tapdev)
@@ -157,15 +285,22 @@ class TapDevManager
   end
   
 private
-  def maybe_save
-    if !@pretend
-      @iffile.backup
-      @iffile.save
+  def files
+    [@interfaces_file, @dnsmasq_file, @squid_file].reject(&:nil?)
+  end
+
+  def maybe_save(file)
+    if !pretend?
+      file.backup
+      file.save
     else
-      puts "Not saving changes since --pretend was given."
-      puts "Would write the following file:"
+      puts
+      puts "Would modify #{file.path} as follows if no --pretend was given:"
       puts "==="
-      puts @iffile.data
+      IO.popen(Shellwords.join(['diff', '-u', file.path, '-']), "w") do |pipe|
+        pipe.write(file.data)
+      end
+      puts
     end
   end
   
@@ -173,7 +308,7 @@ private
     cmd = []
     cmd << which
     cmd << '-v'
-    cmd << '--no-act' if @pretend
+    cmd << '--no-act' if pretend?
     cmd << tapdev
     system(Shellwords.join(cmd))
   end
@@ -198,25 +333,30 @@ if consume_opt('-h') || consume_opt('--help')
   exit!(0)
 end
 
-pretend = consume_opt('-p') || consume_opt('--pretend')
+options = {
+  :pretend => consume_opt('-p') || consume_opt('--pretend'),
+  :dnsmasq => consume_opt('--dnsmasq'),
+  :squid => consume_opt('--squid')
+}
 
 if Process.uid != 0 && !pretend
   puts "This must be run as root."
   exit!(1)
 end
 
-man = TapDevManager.new(pretend)
+man = TapDevManager.new(options)
 
 command = require_arg
 case command
 when 'add'
   tapdev = require_arg
-  internal_ip = require_arg
+  ipaddr = require_arg
   tmc_user = require_arg
-  man.add(tapdev, internal_ip, tmc_user)
+  man.add(tapdev, ipaddr, tmc_user)
 when 'del'
   tapdev = require_arg
-  man.del(tapdev)
+  ipaddr = require_arg
+  man.del(tapdev, ipaddr)
 when 'up'
   tapdev = require_arg
   man.up(tapdev)
