@@ -83,7 +83,6 @@ Let's create a TAP interface named `tap_tmc0` and assign it to the 192.168.88.* 
 
     ip tuntap add dev tap_tmc0 mode tap user tmc
     ifconfig tap_tmc0 192.168.88.1 up
-    # ifconfig tap_tmc0 arp mtu 1484 192.168.88.1 up # TODO: Or this??
 
 These can be configured above to run on bootup, or with a distro-specific network configuration.
 The following is an example for Debian's `/etc/network/interfaces`
@@ -94,6 +93,9 @@ The following is an example for Debian's `/etc/network/interfaces`
         netmask 255.255.255.0
         pre-up ip tuntap add dev tap_tmc0 mode tap user tmc
         post-down ip tuntap del dev tap_tmc0 mode tap
+
+There is a handy script, `management/manage-tap-devs` for adding or removing
+the above in `/etc/network/interfaces`. Run it with `--help` to see.
 
 Now the sandbox's `eth0` can be bound to `tap_tmc0` with the following command line parameter:
 

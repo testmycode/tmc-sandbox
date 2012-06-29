@@ -1,0 +1,229 @@
+#!/usr/bin/env ruby
+require 'shellwords'
+require 'fileutils'
+
+USAGE_TEXT = <<EOS
+This script manages tap device entries for
+/etc/network/interfaces on Debian-based systems.
+It must be run as root.
+
+It understands auto and iface stanzas and requires
+that options of an iface stanza are indented
+and immediately below the iface line without
+empty lines in between.
+
+The parts of the file that the script doesn't modify
+are preserved.
+
+Usage:
+
+  manage-tap-devs add <tapN> <internal-ip> <tmc-user>
+    Adds a tap device to /etc/network/interfaces unless it's already there.
+  
+  manage-tap-devs del <tapN>
+    Removes a tap device from /etc/network/interfaces if it's there.
+  
+  manage-tap-devs up <tapN>
+    Brings a configured tap device up.
+
+  manage-tap-devs down <tapN>
+    Brings a configured tap device down.
+  
+Options:
+  -p, --pretend      Don't really write conf file or alter interfaces.
+  -h, --help         This.
+
+EOS
+
+
+class InterfacesFile
+  DEFAULT_FILE = '/etc/network/interfaces'
+
+  def initialize(data)
+    data = data.gsub("\r", "") # Just in case
+    @lines = data.split("\n")
+    @lines << "" if @lines.empty? # so .first and .last always work
+  end
+  
+  def data
+    @lines.join("\n")
+  end
+  
+  def iface_exists?(iface)
+    !!find_iface_lines(iface)
+  end
+  
+  def add_tap_iface(iface, ipaddr, tapuser)
+    @lines << "" if !@lines.last.strip.empty?
+    @lines << "auto #{iface}"
+    @lines << "iface #{iface} inet static"
+    @lines << "\taddress #{ipaddr}"
+    @lines << "\tnetmask 255.255.255.0"
+    @lines << "\tpre-up ip tuntap add dev #{iface} mode tap user #{tapuser}"
+    @lines << "\tpost-down ip tuntap del dev #{iface} mode tap"
+    @lines << ""
+  end
+  
+  def remove_iface(iface)
+    iface_lines = find_iface_lines(iface)
+    @lines.slice!(iface_lines) if iface_lines != nil
+    
+    @lines.map! do |line|
+      if line =~ /^\s*auto\s(.*)(#.*)?$/
+        ifaces = $1.strip.split(/\s+/)
+        if ifaces.include?(iface)
+          ifaces.delete(iface)
+          if !ifaces.empty?
+            comment = if $2 then " #{$2}" else "" end
+            "auto #{ifaces.join(' ')}#{comment}"
+          else
+            nil
+          end
+        else
+          line
+        end
+      else
+        line
+      end
+    end.reject!(&:nil?)
+
+    @lines << "" if @lines.empty?
+    @lines << "" if !@lines.last.strip.empty?
+  end
+  
+  def self.load(path = DEFAULT_FILE)
+    InterfacesFile.new(File.read(path))
+  end
+  
+  def save(path = DEFAULT_FILE)
+    File.open(path, 'wb') {|f| f.write(data) }
+  end
+  
+  def backup(path = DEFAULT_FILE)
+    FileUtils.cp(path, path + '.bak')
+  end
+
+private
+  def find_iface_lines(iface)
+    first = @lines.find_index {|line| line =~ /^\s*iface\s+#{iface}/ }
+    if first != nil
+      last = first
+      while !(without_comment(@lines[last+1].to_s).strip.empty? || stanza_line?(@lines[last+1].to_s))
+        last += 1
+      end
+      last += 1 if @lines[last+1].to_s.strip.empty?
+      (first..last)
+    else
+      nil
+    end
+  end
+  
+  def without_comment(line)
+    line.gsub(/#.*/, "")
+  end
+  
+  def stanza_line?(line)
+    !!(line =~ /^\s*(iface|mapping|auto|allow-|source)/)
+  end
+end
+
+
+class TapDevManager
+  def initialize(pretend)
+    @pretend = pretend
+    @iffile = InterfacesFile.load
+  end
+
+  def add(tapdev, internal_ip, tmc_user)
+    if !@iffile.iface_exists?(tapdev)
+      @iffile.add_tap_iface(tapdev, internal_ip, tmc_user)
+      maybe_save
+    else
+      puts "Interface #{tapdev} already configured. Not doing anything."
+    end
+  end
+  
+  def del(tapdev)
+    @iffile.remove_iface(tapdev)
+    maybe_save
+  end
+  
+  def up(tapdev)
+    ifupdown('ifup', tapdev)
+  end
+  
+  def down(tapdev)
+    ifupdown('ifdown', tapdev)
+  end
+  
+private
+  def maybe_save
+    if !@pretend
+      @iffile.backup
+      @iffile.save
+    else
+      puts "Not saving changes since --pretend was given."
+      puts "Would write the following file:"
+      puts "==="
+      puts @iffile.data
+    end
+  end
+  
+  def ifupdown(which, tapdev)
+    cmd = []
+    cmd << which
+    cmd << '-v'
+    cmd << '--no-act' if @pretend
+    cmd << tapdev
+    system(Shellwords.join(cmd))
+  end
+end
+
+
+
+def require_arg
+  if ARGV.empty?
+    puts USAGE_TEXT
+    exit!(1)
+  end
+  ARGV.shift
+end
+
+def consume_opt(opt)
+  !!ARGV.delete(opt)
+end
+
+if consume_opt('-h') || consume_opt('--help')
+  puts USAGE_TEXT
+  exit!(0)
+end
+
+pretend = consume_opt('-p') || consume_opt('--pretend')
+
+if Process.uid != 0 && !pretend
+  puts "This must be run as root."
+  exit!(1)
+end
+
+man = TapDevManager.new(pretend)
+
+command = require_arg
+case command
+when 'add'
+  tapdev = require_arg
+  internal_ip = require_arg
+  tmc_user = require_arg
+  man.add(tapdev, internal_ip, tmc_user)
+when 'del'
+  tapdev = require_arg
+  man.del(tapdev)
+when 'up'
+  tapdev = require_arg
+  man.up(tapdev)
+when 'down'
+  tapdev = require_arg
+  man.down(tapdev)
+else
+  raise "Unknown command: #{command}"
+end
+
