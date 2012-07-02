@@ -11,4 +11,7 @@
 /web/work
 /web/*.log
 /web/*.pid
+/web/cache
+/web/ext/*.o
+/web/ext/Makefile
 

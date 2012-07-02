@@ -1,6 +1,28 @@
 
+task :default => :ext
+
+desc "Compile C extensions"
+task :ext => 'ext/misc_utils_ext.so'
+
+file 'ext/misc_utils_ext.so' => ['ext/Makefile', 'ext/misc_utils_ext.c'] do
+  Dir.chdir("ext") do
+    sh("make")
+  end
+end
+
+file 'ext/Makefile' do
+  Dir.chdir("ext") do
+    sh("bundle exec ruby extconf.rb")
+  end
+end
+
 desc "Run tests"
-task :test do
-  system("bundle exec testrb test")
+task :test => :ext do
+  sh("bundle exec ruby test/all_tests.rb")
+end
+
+desc "Clean built files"
+task :clean do
+  sh("rm -f ext/*.o ext/*.so ext/Makefile")
 end
 

@@ -27,5 +27,5 @@ output/linux.uml \
   ubdc=tmp/output.tar \
   mem=$MEM \
   $@ \
-  tmc_run_bash
+  'run:"/bin/bash"'
 

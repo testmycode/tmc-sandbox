@@ -1,19 +1,30 @@
+require 'minitest/autorun'
 require "rack/test"
 require 'tempfile'
 require 'pathname'
 require 'fileutils'
 require 'multi_json'
+
 require './sandbox_app'
+require 'ext2_utils'
 require './test/mock_server'
 
-class WebappTest < Test::Unit::TestCase
+class WebappTest < MiniTest::Unit::TestCase
   include Rack::Test::Methods
   
   def app
     if !@app
-      @app = SandboxApp.new('timeout' => '30')
+      @app = make_new_app
     end
     @app
+  end
+  
+  def make_new_app(options = {})
+    options = {
+      'timeout' => '30'
+    }.deep_merge(options)
+    options['plugins'] = nil
+    SandboxApp.new(options)
   end
   
   def setup
@@ -72,7 +83,7 @@ class WebappTest < Test::Unit::TestCase
   end
   
   def test_task_may_time_out
-    @app = SandboxApp.new('timeout' => '1')
+    @app = make_new_app('timeout' => '1')
     
     post_with_notify '/', :file => tar_fixture('sleeper')
     
@@ -93,15 +104,20 @@ class WebappTest < Test::Unit::TestCase
   
   def test_ubdd_locking
     Tempfile.open('ubdd.img') do |file|
-      mke2fs(file.path)
-      @app = SandboxApp.new('extra_image_ubdd' => file.path)
+      ShellUtils.sh!(['fallocate', '-l', "8M", file.path])
+      Ext2Utils.mke2fs(file.path)
+      @app = make_new_app('extra_image_ubdd' => file.path)
       post '/', :file => tar_fixture('sleeper')
-      sleep 1
-      assert_equal false, file.flock(File::LOCK_EX | File::LOCK_NB)
-      assert_equal 0, file.flock(File::LOCK_SH | File::LOCK_NB)
-      assert_equal 0, file.flock(File::LOCK_UN)
+      assert last_response.ok?
       
-      @app.kill_runner
+      sleep 2
+      begin
+        assert_equal false, file.flock(File::LOCK_EX | File::LOCK_NB)
+        assert_equal 0, file.flock(File::LOCK_SH | File::LOCK_NB)
+        assert_equal 0, file.flock(File::LOCK_UN)
+      ensure
+        @app.kill_runner
+      end
       
       # It takes a little while for locks to be released.
       # Possibly because UML's children aren't wait()'ed instantly by init.
@@ -122,15 +138,16 @@ class WebappTest < Test::Unit::TestCase
   
   def test_ubdd_use
     Tempfile.open('ubdd.img') do |file|
-      mke2fs(file.path)
-      @app = SandboxApp.new('extra_image_ubdd' => file.path)
+      ShellUtils.sh!(['fallocate', '-l', "8M", file.path])
+      Ext2Utils.mke2fs(file.path)
+      @app = make_new_app('extra_image_ubdd' => file.path)
       
       post_with_notify '/', :file => tar_fixture('use_ubdd')
       
       assert_equal 'finished', @notify_params['status']
       assert_equal '0', @notify_params['exit_code']
-      assert_true @notify_params['test_output'].include?('hello.txt')
-      assert_true @notify_params['test_output'].include?('lost+found') # made by mke2fs
+      assert @notify_params['test_output'].include?('hello.txt')
+      assert @notify_params['test_output'].include?('lost+found') # made by mke2fs
     end
   end
 
@@ -162,24 +179,6 @@ private
     raise 'No data received from MockServer. Did the program send any?' if req_data == nil
     @notify_content_type = req_data['content_type']
     @notify_params = req_data['params']
-  end
-  
-  def mke2fs(file)
-    size = "8M"
-    `dd if=/dev/zero of=#{Shellwords.escape(file)} bs=#{size} count=1 2>&1`
-    raise "failed to init image file #{file}" unless $?.success?
-    
-    program = find_program('mke2fs', ['/sbin', '/usr/sbin', '/usr/local/sbin'])
-    output = `#{program} -F #{file} 2>&1`
-    raised "failed to mke2fs -F #{file}:\n#{output}" unless $?.success?
-  end
-  
-  def find_program(program, dirs)
-    for dir in dirs
-      candidate = "#{dir}/#{program}"
-      return candidate if File.exist?(candidate)
-    end
-    program
   end
 end
 

@@ -3,6 +3,8 @@ source 'http://rubygems.org'
 gem 'rack'
 gem 'multi_json'
 gem 'lockfile'
+gem 'activesupport'
+gem 'hash-deep-merge'
 
 gem 'test-unit'
 gem 'rack-test'

@@ -1,5 +1,6 @@
 # The web interface
 # See site.defaults.yml for configuration.
+require './init.rb'
 
 require 'fileutils'
 require 'yaml'
@@ -10,6 +11,11 @@ require 'net/http'
 require 'uri'
 require 'lockfile'
 require 'logger'
+require 'active_support/inflector'
+require 'hash_deep_merge'
+
+require 'subprocess_with_timeout'
+require 'misc_utils'
 
 class SandboxApp
   def self.debug_log # Dunno if Logger is safe to use in subprocesses, but don't care since it's a debug tool.
@@ -59,82 +65,60 @@ class SandboxApp
     def vm_log_path
       work_dir + 'vm.log'
     end
+    
+    def plugin_path
+      web_dir + 'plugins'
+    end
   end
   
+  class Plugin
+    include Paths
+    
+    def initialize(settings)
+      @settings = settings
+      @plugin_settings = settings['plugins'][plugin_name]
+    end
+    
+    def plugin_name
+      ActiveSupport::Inflector.underscore(self.class.to_s)
+    end
+    
+    attr_reader :settings
+    
+    # Run just before starting the UML subprocess.
+    # options:
+    #   :tar_file => path to submission .tar file for this request.
+    def before_exec(options)
+    end
+  end
   
-  class SubprocessWithTimeout
-    def initialize(timeout, &block)
-      @timeout = timeout
-      @block = block
+  class PluginManager
+    include Paths
+    
+    def initialize(settings)
+      @settings = settings
       
-      @intermediate_pid = nil
-    end
-    
-    # Runs block in an intermediate subprocess immediately after the main subprocess finishes or times out
-    def when_done(&block)
-      @after_block = block
-    end
-    
-    def start
-      raise 'previous run not waited nor killed' if @intermediate_pid
-      
-      @intermediate_pid = Process.fork do
-        # We start a new session for two reasons.
-        # First, we want to be able to kill the whole process group at once.
-        # Second, UML likes to mess up the current session's console.
-        #
-        # Also, when UML panics, it goes berserk and kills its entire process group.
-        # `wait` will then find this process dead by SIGTERM.
-        #
-        # Moreover we shall kill this entire process group if the UML timeouts too,
-        # since otherwise UML child processes may be left, holding locks to files
-        # and preventing future UMLs from starting.
-        Process.setsid
-        
-        worker_pid = Process.fork(&@block)
-        timeout_pid = Process.fork do
-          [$stdin, $stdout, $stderr].each &:close
-          sleep @timeout
-        end
-        SandboxApp.debug_log.debug "PIDS: Intermediate(#{Process.pid}), Worker(#{worker_pid}), Timeout(#{timeout_pid})"
-        
-        finished_pid, status = Process.waitpid2(-1)
-        if finished_pid == worker_pid
-          SandboxApp.debug_log.debug "Worker finished with status #{status.inspect}"
-          Process.kill("KILL", timeout_pid)
-          Process.waitpid(timeout_pid)
-        else
-          SandboxApp.debug_log.debug "Worker timed out. Will send notification and kill process group."
-          status = :timeout
-        end
-        
-        @after_block.call(status)
-        Process.kill("KILL", -Process.pid) if status == :timeout
-      end
-    end
-    
-    def running?
-      wait(false)
-      @intermediate_pid != nil
-    end
-    
-    def wait(block = true)
-      if @intermediate_pid
-        SandboxApp.debug_log.debug "Waiting for runner (#{@intermediate_pid}) to stop (blocking = #{block})"
-        
-        pid, status = Process.waitpid2(@intermediate_pid, if block then 0 else Process::WNOHANG end)
-        if pid != nil
-          SandboxApp.debug_log.debug "Runner (#{@intermediate_pid}) stopped. Status: #{status.inspect}."
-          @intermediate_pid = nil
+      @plugins = []
+      if @settings['plugins'].is_a?(Hash)
+        plugin_names = @settings['plugins'].keys.sort # arbitrary but predictable load order
+        for plugin_name in plugin_names
+          if @settings['plugins'][plugin_name]['enabled']
+            SandboxApp.debug_log.debug "Loading plugin #{plugin_name}"
+            require "#{plugin_path}/#{plugin_name}.rb"
+            class_name = ActiveSupport::Inflector.camelize(plugin_name)
+            @plugins << const_get(plugin_name).new(@settings)
+          end
         end
       end
     end
     
-    def kill
-      if @intermediate_pid
-        SandboxApp.debug_log.debug "Killing runner (#{@intermediate_pid}) process group"
-        Process.kill("KILL", -@intermediate_pid) # kill entire process group
-        wait
+    def run_hook(hook, *args)
+      for plugin in @plugins
+        begin
+          plugin.send(hook, *args)
+        rescue
+          SandboxApp.debug_log.debug "Plugin hook #{plugin}.#{hook} raised exception: #{$!}"
+        end
       end
     end
   end
@@ -143,14 +127,16 @@ class SandboxApp
   class Runner
     include Paths
     
-    def initialize(settings)
+    def initialize(settings, plugin_manager)
       @settings = settings
+      @plugin_manager = plugin_manager
       nuke_work_dir!
       
-      @subprocess = SubprocessWithTimeout.new(@settings['timeout'].to_i) do
+      @subprocess = SubprocessWithTimeout.new(@settings['timeout'].to_i, SandboxApp.debug_log) do
         $stdin.close
         $stdout.reopen("#{vm_log_path}", "w")
         $stderr.reopen($stdout)
+        nocloexec = [$stdout, $stderr]
         
         `dd if=/dev/zero of=#{output_tar_path} bs=#{@settings['max_output_size']} count=1`
         exit!(1) unless $?.success?
@@ -166,10 +152,11 @@ class SandboxApp
         ]
         if @settings['extra_image_ubdd']
           ubdd = @settings['extra_image_ubdd']
-          args << "ubddrc=#{ubdd}"
           SandboxApp.debug_log.debug "Using #{ubdd} as ubdd"
+          args << "ubddrc=#{ubdd}"
           ubdd_file = File.open(ubdd, File::RDONLY)
           ubdd_file.flock(File::LOCK_SH) # Released when UML exits
+          nocloexec << ubdd_file
         end
         if @settings['extra_uml_args'].is_a?(Enumerable)
           args += @settings['extra_uml_args']
@@ -180,6 +167,7 @@ class SandboxApp
         cmd = Shellwords.join(args)
         
         SandboxApp.debug_log.debug "PID #{Process.pid} executing: #{cmd}"
+        MiscUtils.cloexec_all_except(nocloexec)
         Process.exec(cmd)
       end
       
@@ -224,6 +212,7 @@ class SandboxApp
       @tar_file = tar_file
       @notifier = notifier
       
+      @plugin_manager.run_hook(:before_exec, :tar_file => @tar_file)
       @subprocess.start
     end
     
@@ -289,12 +278,15 @@ class SandboxApp
   class BadRequest < StandardError; end
 
   def initialize(settings_overrides = {})
-    @settings = load_settings.merge(settings_overrides)
+    @settings = SandboxApp.load_settings.merge(settings_overrides)
     SandboxApp.debug_log = Logger.new(@settings['debug_log_file']) unless @settings['debug_log_file'].to_s.empty?
     SandboxApp::Paths.root_dir = @settings['sandbox_files_root']
     init_check
-    @runner = Runner.new(@settings)
+    @plugin_manager = PluginManager.new(@settings)
+    @runner = Runner.new(@settings, @plugin_manager)
   end
+  
+  attr_reader :settings
 
   def call(env)
     raw_response = nil
@@ -319,6 +311,14 @@ class SandboxApp
   
   def wait_for_runner_to_finish
     @runner.wait
+  end
+  
+  def self.load_settings
+    s = YAML.load_file(Paths.web_dir + 'site.defaults.yml')
+    if File.exist?(Paths.web_dir + 'site.yml')
+      s = s.deep_merge(YAML.load_file(Paths.web_dir + 'site.yml'))
+    end
+    s
   end
 
 private
@@ -355,14 +355,6 @@ private
     raise 'kernel not compiled' unless File.exist? kernel_path
     raise 'rootfs not prepared' unless File.exist? rootfs_path
     raise 'initrd not made' unless File.exist? initrd_path
-  end
-  
-  def load_settings
-    settings = YAML.load_file(web_dir + 'site.defaults.yml')
-    if File.exist?(web_dir + 'site.yml')
-      settings = settings.merge(YAML.load_file(web_dir + 'site.yml'))
-    end
-    settings
   end
 end
 

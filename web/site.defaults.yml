@@ -28,7 +28,7 @@ timeout: 120
 #
 # Extra parameters to user-mode-linux.
 # Can be used e.g. to configure virtual networks.
-# If you want to give many parameters then make them as a YAML array.
+# If you want to give many parameters then write them as a YAML array.
 #
 extra_uml_args:
 
@@ -43,4 +43,24 @@ debug_log_file:
 # like the root filesystem. The file will be non-exclusively flock()'ed while in use.
 #
 extra_image_ubdd:
+
+#
+# Plugins and their configurations.
+# Relative paths are relative to this directory (`web/`).
+# Read the files under `plugins/` for documentation of each plugin.
+#
+plugins:
+  maven_cache:
+    enabled: false
+    # Image files. Autocreated if necessary.
+    img1: cache/maven/1.img
+    img2: cache/maven/2.img
+    symlink: cache/maven/current.img
+    work_dir: cache/maven/work
+    img_size: 1G  # When creating images if they don't exist
+    tap_device: tap_mvncache
+    tap_ip: 192.168.90.1
+    # The plugin will copy projects and create lockfiles here.
+    # How long to permit one download task to last, in seconds.
+    download_timeout: 300 # 5 minutes
 

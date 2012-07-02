@@ -5,40 +5,57 @@ echo "Entering tmc-init"
 
 export LANG="en_US.UTF-8"
 
-EXERCISE_TAR=/dev/ubdb
-OUTPUT_FILE=/dev/ubdc
-WORKDIR=/tmc
+summarize_text_file() {
+  [ -e $1 ] || touch $1
+  LINES=`cat $1 | wc -l`
+  if [ $LINES -gt 1000 ]; then
+    head -n 500 $1 > "$1.head"
+    tail -n 500 $1 > "$1.tail"
+    cat "$1.head" > $1
+    echo "..." >> $1
+    echo "..." >> $1
+    echo "..." >> $1
+    cat "$1.tail" >> $1
+    rm -f "$1.head" "$1.tail"
+  fi
+}
 
 # Ensure UML block device nodes exist
-[ -e /dev/ubda ] || mknod /dev/ubda b 98 0
-[ -e /dev/ubdb ] || mknod /dev/ubdb b 98 16
-[ -e /dev/ubdc ] || mknod /dev/ubdc b 98 32
-[ -e /dev/ubdd ] || mknod /dev/ubdd b 98 48
+[ -e /dev/ubda ] || mknod /dev/ubda b 98 0    # Root image
+[ -e /dev/ubdb ] || mknod /dev/ubdb b 98 16   # Input tar file
+[ -e /dev/ubdc ] || mknod /dev/ubdc b 98 32   # Output tar file
+[ -e /dev/ubdd ] || mknod /dev/ubdd b 98 48   # Special purpose read-only file
+[ -e /dev/ubde ] || mknod /dev/ubde b 98 64   # Special purpose read-write file
 
 # Mount /proc and /sys
 mount -t proc proc /proc
 mount -t sysfs sys /sys
 
-# Go to working dir
-mkdir -p $WORKDIR
-cd $WORKDIR
-
-# Unzip exercise
-tar xf $EXERCISE_TAR
-
-# Create user and give permissions
+# Create a non-root user
 useradd --system tmc
-chown -R tmc $WORKDIR
-chmod -R u+rX $WORKDIR
 
-# Mount ubdd if requested
+# Mount ubdd as read-only
 if `cat /proc/cmdline | grep -E -q ubdd[rc]?[rc]?=`; then
-  echo "Mounting /ubdd"
-  mkdir -p /mnt/ubdd_ro /mnt/ubdd_rw /ubdd
-  mount -o ro /dev/ubdd /mnt/ubdd_ro
-  mount -t tmpfs -o rw,size=64M none /mnt/ubdd_rw # This is necessary since aufs can't use another aufs as a write branch
-  mount -t aufs -o rw,br=/mnt/ubdd_rw:/mnt/ubdd_ro aufs /ubdd
-  chown tmc /ubdd
+  if `cat /proc/cmdline | grep -E -q nomount_ubdd`; then
+    echo "Skipping mounting /ubdd"
+  else
+    echo "Mounting /ubdd as read-only with writable ramdisk"
+    mkdir -p /mnt/ubdd_ro /mnt/ubdd_rw /ubdd
+    mount -o ro /dev/ubdd /mnt/ubdd_ro
+    mount -t tmpfs -o rw,size=64M none /mnt/ubdd_rw # This is necessary since aufs can't use another aufs as a write branch
+    mount -t aufs -o rw,br=/mnt/ubdd_rw:/mnt/ubdd_ro aufs /ubdd
+  fi
+fi
+
+# Mount ubde as read-write
+if `cat /proc/cmdline | grep -E -q ubdec?=`; then
+  if `cat /proc/cmdline | grep -E -q nomount_ubde`; then
+    echo "Skipping mounting /ubde"
+  else
+    echo "Mounting /ubde as read-write"
+    mkdir -p /ubde
+    mount -o rw /dev/ubde /ubde
+  fi
 fi
 
 # Set up networking, if enabled
@@ -58,46 +75,53 @@ if `cat /proc/cmdline | grep -E -q 'eth0=tuntap'`; then
     ifconfig eth0 $IP_ADDR up
     route add -host $IP_ADDR gw $GW_ADDR
     echo "nameserver $GW_ADDR" > /etc/resolv.conf
+    
     export http_proxy="http://$GW_ADDR:3128"
     echo "http.proxyHost=$GW_ADDR" >> /etc/java-6-openjdk/net.properties
     echo "http.proxyPort=3128" >> /etc/java-6-openjdk/net.properties
     cat /etc/maven-settings.template.xml | sed "s/__PROXY_IP__/$GW_ADDR/" > /opt/maven/conf/settings.xml
 fi
 
-if `cat /proc/cmdline | grep -q tmc_run_bash`; then
-  # Support exploring the VM interactively
-  cd /
-  /bin/bash
+if `cat /proc/cmdline | grep -E -q 'run:"([^"]*)"'`; then
+  COMMAND=`cat /proc/cmdline | grep -E -o 'run:"([^"]*)"' | sed s/run:\"// | sed s/\"\$//`
+  echo "Running $COMMAND"
+  $COMMAND
+elif `cat /proc/cmdline | grep -E -q 'run_tarred_script:([^[:space:]]*)'`; then
+  BLOCKDEV=`cat /proc/cmdline | grep -E -o 'run_tarred_script:([^[:space:]]*)' | sed s/run_tarred_script://`
+  echo "Untarring $BLOCKDEV"
+  mkdir /tmc
+  tar -C /tmc -xf $BLOCKDEV
+  echo "Running untarred tmc-run"
+  SCRIPT=/tmc/tmc-run
+  chmod +x $SCRIPT
+  $SCRIPT
 else
-  # Compile and run the program
+  # Prepare TMC exercise execution
+  EXERCISE_TAR=/dev/ubdb
+  OUTPUT_FILE=/dev/ubdc
+  WORKDIR=/tmc
+
+  mkdir -p $WORKDIR
+  cd $WORKDIR
+
+  tar xf $EXERCISE_TAR
+
+  chown -R tmc $WORKDIR
+  chmod -R u+rX $WORKDIR
+
   echo "Starting tmc-run"
   EXIT_CODE=`( set +e; su tmc -c ./tmc-run > /dev/null 2>&1; echo $?; true )`
   echo "Completed tmc-run. Exit code: $EXIT_CODE"
+  
+  # Write the result
+  [ -e test_output.txt ] || touch test_output.txt
+  summarize_text_file stdout.txt
+  summarize_text_file stderr.txt
+
+  echo $EXIT_CODE > exit_code.txt
+
+  tar c test_output.txt exit_code.txt stdout.txt stderr.txt > $OUTPUT_FILE
 fi
-
-summarize_text_file() {
-  [ -e $1 ] || touch $1
-  LINES=`cat $1 | wc -l`
-  if [ $LINES -gt 1000 ]; then
-    head -n 500 $1 > "$1.head"
-    tail -n 500 $1 > "$1.tail"
-    cat "$1.head" > $1
-    echo "..." >> $1
-    echo "..." >> $1
-    echo "..." >> $1
-    cat "$1.tail" >> $1
-    rm -f "$1.head" "$1.tail"
-  fi
-}
-
-# Write the result
-[ -e test_output.txt ] || touch test_output.txt
-summarize_text_file stdout.txt
-summarize_text_file stderr.txt
-
-echo $EXIT_CODE > exit_code.txt
-
-tar c test_output.txt exit_code.txt stdout.txt stderr.txt > $OUTPUT_FILE
 
 # Shut down
 echo "Shutting down..."
