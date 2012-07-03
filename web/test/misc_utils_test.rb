@@ -1,7 +1,6 @@
 
 require './init.rb'
 require 'minitest/autorun'
-require "rack/test"
 
 require 'misc_utils'
 
