@@ -59,7 +59,7 @@ plugins:
     work_dir: cache/maven/work
     img_size: 1G  # When creating images if they don't exist
     tap_device: tap_mvncache
-    tap_ip: 192.168.90.1
+    tap_ip: 192.168.190.1
     # The plugin will copy projects and create lockfiles here.
     # How long to permit one download task to last, in seconds.
     download_timeout: 300 # 5 minutes

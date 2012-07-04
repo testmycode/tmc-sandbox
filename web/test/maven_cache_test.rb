@@ -47,7 +47,6 @@ class MavenCacheTest < MiniTest::Unit::TestCase
     
     @mc.wait_for_daemon
     
-    # For debugging:
     print_debug_logs
 
     check_dep_exists_in_both_images("com/google/inject/guice/3.0")

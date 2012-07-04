@@ -121,6 +121,12 @@ $(OUT)/initrd/init: chroot busybox
 	cp initrd/initrd-init-script $(OUT)/initrd/init
 	chmod +x $(OUT)/initrd/init
 
+# Run all tests
+check:
+	echo "Running tests in web/"
+	cd web && rake test
+	echo "Running tests in management/"
+	cd management && rake test
 
 # Cleanup
 clean: clean-kernel clean-rootfs clean-busybox clean-initrd

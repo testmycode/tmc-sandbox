@@ -3,22 +3,31 @@ require 'minitest/autorun'
 require 'fileutils'
 require 'yaml'
 require 'shellwords'
+require 'etc'
 
 # Note: this test may leave instances running if it fails.
+# Note: by default this test suppresses output. See invoke() below.
 class ManageSandboxesTest < MiniTest::Unit::TestCase
   def setup
+    Dir.chdir(management_dir)
     FileUtils.rm_rf(work_dir)
     FileUtils.mkdir_p(work_dir)
-    FileUtils.mkdir_p(work_dir + '/tmc-sandbox')
-    FileUtils.ln_s(File.expand_path('../output'), work_dir + '/tmc-sandbox/output')
-    FileUtils.ln_s(File.expand_path('../web'), work_dir + '/tmc-sandbox/web')
-    @script_path = File.expand_path('./manage-sandboxes')
-    @test_suite_dir = File.expand_path(File.dirname(__FILE__))
+    @script_path = File.expand_path("#{management_dir}/manage-sandboxes")
     Dir.chdir(work_dir)
+    
+    current_user = Etc.getlogin
+    
+    write_config <<EOS
+class SandboxManagerConfig < SandboxManager::BaseConfig
+  def tmc_user
+    '#{current_user}'
+  end
+end
+EOS
   end
   
   def teardown
-    Dir.chdir(@test_suite_dir)
+    Dir.chdir(management_dir)
     FileUtils.rm_rf(work_dir)
   end
   
@@ -28,7 +37,7 @@ class ManageSandboxesTest < MiniTest::Unit::TestCase
     assert File.exist?('3101')
     assert File.exist?('3102')
     site_yml = YAML.load_file('3101/site.yml')
-    assert_equal(File.expand_path('./tmc-sandbox/output'), site_yml['sandbox_files_root'])
+    assert_equal(File.realpath("#{management_dir}/../output"), site_yml['sandbox_files_root'])
   end
   
   def test_destroy
@@ -88,11 +97,39 @@ class ManageSandboxesTest < MiniTest::Unit::TestCase
     invoke('stop', '3102')
   end
   
+  def test_network_setup
+    if Process.uid == 0
+      write_config <<EOS
+class SandboxManagerConfig < SandboxManager::BaseConfig
+  include SandboxManager::NetworkConfig
+  
+  def tmc_user
+    'root'
+  end
+end
+EOS
+      invoke('create', '3077')
+      ifaces_file = File.read('/etc/network/interfaces')
+      assert(ifaces_file.include?("iface tmc_tap77"), "Network interface was not configured")
+      
+      invoke('start', '3077')
+      assert(`ifconfig`.include?('tmc_tap77'), "Network interface was not brought up")
+      
+      invoke('stop', '3077')
+      assert(!`ifconfig`.include?('tmc_tap77'), "Network interface was not brought down")
+      
+      invoke('destroy', '3077')
+    else
+      skip("Need to be root to run this test")
+    end
+  end
+  
   
 private
   def invoke(*args)
+    args = ['--config', test_config_file] + args
     invoke_no_output(*args)
-    #invoke_with_output(*args) # for debugging
+    #invoke_with_output(*args) # comment above and uncomment this for debugging
   end
 
   def invoke_with_output(*args)
@@ -103,9 +140,23 @@ private
     system("#{@script_path} " + Shellwords.join(args) + " > output.txt 2>&1")
     raise "#{$?} with output:\n#{File.read('output.txt')}" unless $?.success?
   end
+  
+  def write_config(config)
+    File.open(test_config_file, 'wb') do |f|
+      f.write(config)
+    end
+  end
+  
+  def management_dir
+    @@management_dir ||= File.dirname(File.realpath(__FILE__))
+  end
 
   def work_dir
     '/tmp/manage-sandboxes_test'
+  end
+  
+  def test_config_file
+    "#{work_dir}/test_config.rb"
   end
 end
 

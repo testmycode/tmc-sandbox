@@ -8,9 +8,8 @@ This script manages tap device entries for
 It must be run as root.
 
 It understands auto and iface stanzas and requires
-that options of an iface stanza are indented
-and immediately below the iface line without
-empty lines in between.
+that options of an iface stanza are immediately below the
+iface line without empty lines in between.
 
 The parts of the file that the script doesn't modify
 are preserved.
@@ -42,7 +41,10 @@ Options:
   -h, --help         This.
   
   --dnsmasq          Also configure [add/del] dnsmasq but don't restart it.
+                     Adds/removes "interface=" and "no-dhcp-interface=" lines.
+
   --squid            Also configure [add/del] squid but don't restart it.
+                     Adds/removes "http_port <ipaddr>:<port>" lines.
 
 EOS
 
@@ -271,6 +273,7 @@ class TapDevManager
   
   def del(tapdev, ipaddr)
     for file in files
+      puts "Removing #{tapdev} #{ipaddr} from #{file.path}"
       file.remove_iface(tapdev, ipaddr)
       maybe_save(file)
     end
@@ -339,8 +342,8 @@ options = {
   :squid => consume_opt('--squid')
 }
 
-if Process.uid != 0 && !pretend
-  puts "This must be run as root."
+if Process.uid != 0 && !options[:pretend]
+  puts "This must be run as root, or you can give --pretend to see what would be done."
   exit!(1)
 end
 
