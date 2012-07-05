@@ -359,6 +359,7 @@ when 'add'
 when 'del'
   tapdev = require_arg
   ipaddr = require_arg
+  man.down(tapdev)
   man.del(tapdev, ipaddr)
 when 'up'
   tapdev = require_arg
