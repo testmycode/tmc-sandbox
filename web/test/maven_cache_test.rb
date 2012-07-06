@@ -85,7 +85,7 @@ private
     begin
       SandboxApp.debug_log.debug "Log file in #{name}.tar:"
       cmd = Shellwords.join(['tar', '--to-stdout', '-xf', tar_path, 'log.txt'])
-      SandboxApp.debug_log.debug `#{cmd}`
+      SandboxApp.debug_log.debug `#{cmd} 2>&1`
     rescue
       SandboxApp.debug_log.debug "No #{name}.tar file produced"
     end
@@ -117,7 +117,7 @@ private
     
     for img in ['1.img', '2.img']
       cmd = Shellwords.join(['e2ls', "#{@tmpdir}/maven/#{img}:/maven/repository/#{dep}"])
-      ls_output = `#{cmd}`
+      ls_output = `#{cmd} 2>&1`
       assert ls_output.include?("#{name}-#{version}.jar")
       assert ls_output.include?("#{name}-#{version}.pom")
     end

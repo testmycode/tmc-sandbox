@@ -26,24 +26,25 @@ require 'subprocess_with_timeout'
 # If the sandbox is using the cache while buffers are swapped,
 # writes to what becomes the back buffer will block until the sandbox releases
 # its lock.
-#
+# 
 # It's possible for the daemon to fail e.g. because it ran out of space on an image.
 # In this case, the image is likely (given maven's correctness) to be left in a
 # usable state and the daemon will eventually be started again and try again,
 # until an administrator resolves the situation. TODO: better error reporting
 #
 # System requirements:
-#    
+# 
 # A squid proxy must be configured with a dedicated TAP device for this plugin.
 # See site.defaults.yml and the readme.
 #
 # Implementation details:
 # 
-# To reduce contention and unnecessary swaps, the plugin starts a daemon (at most one even if taskdir is shared).
-# The daemon processes Maven projects dropped into the taskdir until it's empty. Then it exits.
-# To prevent race conditions, the taskdir is protected by a lockfile.
-# The lock is acquired before writing to the taskdir and trying to start the daemon.
-# The daemon acquires the lock to atomically check if the taskdir is empty and exit if so.
+# To reduce contention and unnecessary swaps, the plugin starts a daemon (at most one even if workdir is shared).
+# The daemon processes Maven projects dropped into the workdir until it's empty. Then it exits.
+# To prevent race conditions, the workdir is protected by a lock.
+# The lock is acquired before writing to the workdir and trying to start the daemon.
+# The daemon acquires the lock to atomically check if the workdir is empty and exit if so.
+# This way, if there are tasks to be executed, a daemon is always executing them.
 #
 class MavenCache < SandboxApp::Plugin
   def initialize(*args)

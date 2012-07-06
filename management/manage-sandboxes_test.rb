@@ -15,12 +15,10 @@ class ManageSandboxesTest < MiniTest::Unit::TestCase
     @script_path = File.expand_path("#{management_dir}/manage-sandboxes")
     Dir.chdir(work_dir)
     
-    current_user = Etc.getlogin
-    
     write_config <<EOS
 class SandboxManagerConfig < SandboxManager::BaseConfig
   def tmc_user
-    '#{current_user}'
+    '#{tmc_user}'
   end
 end
 EOS
@@ -97,6 +95,7 @@ EOS
     invoke('stop', '3102')
   end
   
+  
   def test_network_setup
     if Process.uid == 0
       write_config <<EOS
@@ -104,19 +103,77 @@ class SandboxManagerConfig < SandboxManager::BaseConfig
   include SandboxManager::NetworkConfig
   
   def tmc_user
-    'root'
+    '#{tmc_user}'
   end
 end
 EOS
       invoke('create', '3077')
       ifaces_file = File.read('/etc/network/interfaces')
-      assert(ifaces_file.include?("iface tmc_tap77"), "Network interface was not configured")
+      assert(ifaces_file.include?("iface tap_tmc77 inet static"), "Network interface was not configured")
+      assert(ifaces_file.include?("pre-up ip tuntap add dev tap_tmc77 mode tap user #{tmc_user}"),
+             "Network interface was configured incorrectly (pre-up line)")
+      assert(ifaces_file.include?("post-down ip tuntap del dev tap_tmc77 mode tap"),
+             "Network interface was configured incorrectly (post-down line)")
+      
+      site_yml = YAML.load_file('3077/site.yml')
+      assert_equal("eth0=tuntap,tap_tmc77,,192.168.77.1", site_yml['extra_uml_args'])
       
       invoke('start', '3077')
-      assert(`ifconfig`.include?('tmc_tap77'), "Network interface was not brought up")
+      assert(`ifconfig`.include?('tap_tmc77'), "Network interface was not brought up")
       
       invoke('stop', '3077')
-      assert(!`ifconfig`.include?('tmc_tap77'), "Network interface was not brought down")
+      assert(!`ifconfig`.include?('tap_tmc77'), "Network interface was not brought down")
+      
+      invoke('destroy', '3077')
+    else
+      skip("Need to be root to run this test")
+    end
+  end
+  
+  
+  def test_network_setup_with_maven_cache
+    if Process.uid == 0
+      write_config <<EOS
+class SandboxManagerConfig < SandboxManager::BaseConfig
+  include SandboxManager::NetworkConfig
+  
+  def tmc_user
+    '#{tmc_user}'
+  end
+  
+  def enable_maven_cache?
+    true
+  end
+  
+  def maven_tapdev
+    'tap_mvntest'
+  end
+  
+  def maven_ip
+    '192.168.220.1'
+  end
+end
+EOS
+      invoke('create', '3077')
+      ifaces_file = File.read('/etc/network/interfaces')
+      assert(ifaces_file.include?("iface tap_mvntest inet static"),
+             "Network interface was not configured")
+      assert(ifaces_file.include?("pre-up ip tuntap add dev tap_mvntest mode tap user #{tmc_user}"),
+             "Network interface was configured incorrectly (pre-up line)")
+      assert(ifaces_file.include?("post-down ip tuntap del dev tap_mvntest mode tap"),
+             "Network interface was configured incorrectly (post-down line)")
+      
+      site_yml = YAML.load_file('3077/site.yml')
+      assert_equal(true, site_yml['plugins']['maven_cache']['enabled'])
+      assert_equal('tap_mvntest', site_yml['plugins']['maven_cache']['tap_device'])
+      assert_equal('192.168.220.1', site_yml['plugins']['maven_cache']['tap_ip'])
+      
+      invoke('start', '3077')
+      assert(`ifconfig`.include?('tap_mvntest'), "Network interface was not brought up")
+      assert(`ifconfig`.include?('192.168.220.1'), "Network interface was not brought up with the correct IP")
+      
+      invoke('stop', '3077')
+      assert(`ifconfig`.include?('tap_mvntest'), "Maven network interface was brought down. It shouldn't be.")
       
       invoke('destroy', '3077')
     else
@@ -157,6 +214,24 @@ private
   
   def test_config_file
     "#{work_dir}/test_config.rb"
+  end
+  
+  def tmc_user
+    result = Etc.getlogin
+    if result == 'root'
+      if ENV['TMC_USER']
+        result = ENV['TMC_USER']
+      else
+        begin
+          Etc.getpwnam('tmc')
+        rescue ArgumentError
+          fail("Need tmc user. Run this test via sudo or create the 'tmc' user or set TMC_USER in your env.")
+        else
+          result = 'tmc'
+        end
+      end
+    end
+    result
   end
 end
 

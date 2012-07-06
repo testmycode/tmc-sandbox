@@ -48,32 +48,6 @@ class SandboxManager
   # Configures port 30XX to have tapdev tmc_tapXX
   # and internal IP 192.168.1XX.
   module NetworkConfig
-    def number
-      if 3000 < @port && @port < 3100
-        @port - 3000
-      else
-        raise "Default NetworkConfig only knows how to deal with ports 3001-3099."
-      end
-    end
-    
-    def tapdev
-      "tmc_tap#{number}"
-    end
-    
-    def internal_ip
-      "192.168.#{number}.1"
-    end
-    
-    def manage_tap_devs_script
-      "#{File.dirname(File.realpath(__FILE__))}/manage-tap-devs"
-    end
-    
-    def site_yml_contents
-      super.merge({
-        'extra_uml_args' => 'eth0=tuntap,#{tapdev},,#{internal_ip}'
-      })
-    end
-    
     def configure_interfaces?
       true
     end
@@ -90,19 +64,67 @@ class SandboxManager
       true
     end
     
+    def number
+      if 3000 < @port && @port < 3100
+        @port - 3000
+      else
+        raise "Default NetworkConfig only knows how to deal with ports 3001-3099."
+      end
+    end
+    
+    def tapdev
+      "tap_tmc#{number}"
+    end
+    
+    def internal_ip
+      "192.168.#{number}.1"
+    end
+    
+    def enable_maven_cache?
+      false
+    end
+    
+    def maven_tapdev
+      'tap_mvncache'
+    end
+    
+    def maven_ip
+      '192.168.210.1'
+    end
+    
+    def manage_tap_devs_script
+      "#{File.dirname(File.realpath(__FILE__))}/manage-tap-devs"
+    end
+    
+    def site_yml_contents
+      result = super
+      result = result.merge({
+        'extra_uml_args' => "eth0=tuntap,#{tapdev},,#{internal_ip}"
+      })
+      if enable_maven_cache?
+        result = result.merge({
+          'plugins' => {
+            'maven_cache' => {
+              'enabled' => true,
+              'img1' => "#{master_copy_path}/cache/maven/1.img",
+              'img2' => "#{master_copy_path}/cache/maven/2.img",
+              'symlink' => "#{master_copy_path}/cache/maven/current.img",
+              'work_dir' => "#{master_copy_path}/cache/maven/work",
+              'tap_device' => maven_tapdev,
+              'tap_ip' => maven_ip
+            }
+          }
+        })
+      end
+      result
+    end
+    
     def before_create
       if configure_interfaces?
-        check_root!
-        cmd = [
-          manage_tap_devs_script,
-          'add',
-          tapdev,
-          internal_ip,
-          tmc_user
-        ]
-        cmd << '--squid' if configure_squid?
-        cmd << '--dnsmasq' if configure_dnsmasq?
-        ShellUtils.sh!(cmd)
+        create_tapdev(tapdev, internal_ip, tmc_user)
+        if enable_maven_cache?
+          create_tapdev(maven_tapdev, maven_ip, tmc_user)
+        end
       end
     end
     
@@ -112,34 +134,78 @@ class SandboxManager
     
     def after_destroy
       if configure_interfaces?
-        cmd = [
-          manage_tap_devs_script,
-          'del',
-          tapdev,
-          internal_ip
-        ]
-        cmd << '--squid' if configure_squid?
-        cmd << '--dnsmasq' if configure_dnsmasq?
-        ShellUtils.sh!(cmd)
+        destroy_tapdev(tapdev, internal_ip)
+        # don't destroy maven device since we're not sure if we're its last users
       end
     end
     
     def before_start
       if start_stop_interfaces?
-        ShellUtils.sh!([manage_tap_devs_script, 'up', tapdev])
+        bring_tapdev_up(tapdev)
+        if enable_maven_cache?
+          bring_tapdev_up(maven_tapdev)
+        end
       end
     end
     
     def before_stop
       if start_stop_interfaces?
-        ShellUtils.sh!([manage_tap_devs_script, 'down', tapdev])
+        bring_tapdev_down(tapdev)
+        # we won't bring the maven device down since others may use it
       end
+    end
+    
+    
+  private
+    def create_tapdev(dev, ip, user)
+      check_root!
+      cmd = [
+        manage_tap_devs_script,
+        'add',
+        dev,
+        ip,
+        user
+      ]
+      cmd << '--squid' if configure_squid?
+      cmd << '--dnsmasq' if configure_dnsmasq?
+      ShellUtils.sh!(cmd)
+    end
+    
+    def destroy_tapdev(dev, ip)
+      check_root!
+      cmd = [
+        manage_tap_devs_script,
+        'del',
+        dev,
+        ip
+      ]
+      cmd << '--squid' if configure_squid?
+      cmd << '--dnsmasq' if configure_dnsmasq?
+      ShellUtils.sh!(cmd)
+      
+      reload_squid_config if configure_squid?
+      reload_dnsmasq_config if configure_dnsmasq?
+    end
+    
+    def bring_tapdev_up(dev)
+      ShellUtils.sh!([manage_tap_devs_script, 'up', dev])
+    end
+    
+    def bring_tapdev_down(dev)
+      ShellUtils.sh!([manage_tap_devs_script, 'down', dev])
     end
     
     def check_root!
       if Process.uid != 0
         raise "Need to be root to configure network devices"
       end
+    end
+    
+    def reload_squid_config
+      ShellUtils.sh!(['/etc/init.d/squid3', 'reload'])
+    end
+    def reload_dnsmasq_config
+      ShellUtils.sh!(['/etc/init.d/dnsmasq', 'restart'])
     end
   end
   
@@ -195,18 +261,32 @@ class SandboxManager
     def start
       call_hook :before_start
       
-      cmd = "bundle exec rackup --server webrick --port #{port} --pid webrick.pid >> webrick.log 2>&1 &"
+      cmd = "bundle exec rackup --server webrick --port #{port} --pid webrick.pid"
       if Process.uid == 0
-        raise "Start sandbox as root is a bad idea. Refusing to do it." if tmc_user == 'root'
-        cmd = "su -c #{tmc_user} '#{cmd}'"
+        raise "Starting the webapp as root is a bad idea. Refusing to do it." if @config.tmc_user == 'root'
       end
       cmd = "#{cmd} >> webrick.log 2>&1 &"
-      ShellUtils.sh_preescaped!("cd #{dir} && #{cmd}")
-      
-      raise "Failed to start instance #{port}. Status: #{$?}" unless $?.success?
-      if !wait_with_timeout(5) { running? }
-        raise "Instance #{port} did not start for some reason." if !running?
+      Dir.chdir(dir) do
+        pid = Process.fork do
+          Process::Sys.setreuid(tmc_user_uid, tmc_user_uid)
+          Process.exec(cmd)
+        end
+        Process.waitpid(pid)
+        raise "Failed to start instance #{port}. Status: #{$?}" if !$?.success?
       end
+      
+      if !wait_with_timeout(5) { running? }
+        puts "Instance #{port} did not start for some reason."
+        if File.exist?("#{dir}/webrick.log")
+          log = File.read("#{dir}/webrick.log")
+          puts "Here's the log:\n#{log}"
+        else
+          puts "No webrick.log was produced."
+        end
+        
+        raise "Failed to start instance #{port}"
+      end
+      
       call_hook :after_start
     end
     
@@ -259,8 +339,8 @@ class SandboxManager
       @config.send(hook) if @config.respond_to?(hook)
     end
     
-    def tmc_user
-      @config.tmc_user
+    def tmc_user_uid
+      Etc.getpwnam(@config.tmc_user).uid
     end
   end
   
@@ -272,7 +352,7 @@ class SandboxManager
   
   
   def execute
-    Lockfile.new('manage-sandboxes.lock') do
+    Lockfile.new("#{Dir.pwd}/manage-sandboxes.lock") do
       simple_commands = ['create', 'rebuild', 'destroy', 'start', 'start!', 'stop', 'restart']
       
       if @command == 'onboot'

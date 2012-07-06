@@ -106,7 +106,7 @@ class SandboxApp
             SandboxApp.debug_log.debug "Loading plugin #{plugin_name}"
             require "#{plugin_path}/#{plugin_name}.rb"
             class_name = ActiveSupport::Inflector.camelize(plugin_name)
-            @plugins << const_get(plugin_name).new(@settings)
+            @plugins << Object.const_get(class_name).new(@settings)
           end
         end
       end
