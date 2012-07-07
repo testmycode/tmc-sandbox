@@ -16,5 +16,11 @@ if [ ! -d fs/aufs ]; then
   patch -p1 < ../../kernel/readonly-ubd-fix.patch
   patch -p1 < ../../kernel/um-pass-through-siginfo.patch
 fi
+
+if [ `uname -i` = i386 ]; then
+    # Our default config is for amd64
+    make oldnoconfig ARCH=um
+fi
+
 make -j$SUBMAKE_JOBS ARCH=um
 
