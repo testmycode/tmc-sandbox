@@ -1,10 +1,10 @@
 
 # Build output
-/output
+/uml/output
 
 # Temporaries
-/tmp
-/test/bash-runner
+/uml/tmp
+/uml/test/bash-runner
 
 # Webservice
 /web/site.yml
@@ -14,4 +14,7 @@
 /web/cache
 /web/ext/*.o
 /web/ext/Makefile
+
+# Misc
+/.idea
 
