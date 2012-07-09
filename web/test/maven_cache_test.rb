@@ -49,7 +49,7 @@ class MavenCacheTest < MiniTest::Unit::TestCase
     
     print_debug_logs
 
-    check_dep_exists_in_both_images("com/google/inject/guice/3.0")
+    check_dep_exists_in_both_images("org/apache/commons/commons-io/1.3.2")
   end
   
   def test_maven_cache_two_tasks
@@ -69,7 +69,7 @@ class MavenCacheTest < MiniTest::Unit::TestCase
     
     print_debug_logs
 
-    check_dep_exists_in_both_images("com/google/inject/guice/3.0")
+    check_dep_exists_in_both_images("org/apache/commons/commons-io/1.3.2")
     check_dep_exists_in_both_images("com/google/code/gson/gson/2.2.1")
   end
   
@@ -118,8 +118,8 @@ private
     for img in ['1.img', '2.img']
       cmd = Shellwords.join(['e2ls', "#{@tmpdir}/maven/#{img}:/maven/repository/#{dep}"])
       ls_output = `#{cmd} 2>&1`
-      assert ls_output.include?("#{name}-#{version}.jar")
-      assert ls_output.include?("#{name}-#{version}.pom")
+      assert ls_output.include?("#{name}-#{version}.jar"), "#{name}-#{version}.jar not found. ls output:\n#{ls_output}"
+      assert ls_output.include?("#{name}-#{version}.pom"), "#{name}-#{version}.pom not found. ls output:\n#{ls_output}"
     end
   end
 end
