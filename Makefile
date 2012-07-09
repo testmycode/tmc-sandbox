@@ -11,12 +11,15 @@ ifneq ("$(shell id -nu)","root")
   $(error Makefile must be run as root)
 endif
 
-.PHONY: uml web clean distclean check
+.PHONY: uml misc web clean distclean check
 
-all: uml web
+all: uml misc web
 
 uml:
 	make -C uml
+
+misc:
+	make -C misc
 
 web:
 	cd web && rake

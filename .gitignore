@@ -1,10 +1,17 @@
 
-# Build output
+# UML build output
 /uml/output
 
-# Temporaries
+# UML Temporaries
 /uml/tmp
 /uml/test/bash-runner
+
+# Misc build output
+/misc/dnsmasq
+/misc/squidroot
+
+# Misc temporaries
+/misc/work
 
 # Webservice
 /web/site.yml
