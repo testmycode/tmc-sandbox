@@ -22,5 +22,28 @@ class MiscUtilsTest < MiniTest::Unit::TestCase
       pipe_out.close
     end
   end
+
+  def test_pause
+    pin, pout = IO.pipe
+    pid = Process.fork do
+      pin.close
+      Signal.trap("TERM") do
+        pout.puts "Got TERM"
+      end
+      MiscUtils.wait_for_signal("TERM")
+      pout.puts "Exiting"
+      pout.close
+    end
+    pout.close
+
+    sleep 0.2
+    Process.kill("TERM", pid)
+    data = pin.read
+    Process.waitpid(pid)
+
+    pin.close
+
+    assert_equal "Exiting\n", data
+  end
 end
 

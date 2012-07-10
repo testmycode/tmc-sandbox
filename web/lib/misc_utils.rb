@@ -16,6 +16,10 @@ module MiscUtils
   #     Done in C because Ruby won't let us open IO objects on
   #     its internal FDs.
   #
+  #   self.wait_for_signal(signal1, signal2, ...)
+  #     Waits for and ignores any of the given signals.
+  #     I'm not exactly sure why but a waited signal may still be delivered
+  #     for some reason and so ought to be trapped just in case.
   
   # Sets O_CLOEXEC on all except the given FDs
   def self.cloexec_all_except(fds)

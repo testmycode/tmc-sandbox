@@ -20,8 +20,7 @@
 /web/*.pid
 /web/cache
 /web/ext/*.o
+/web/ext/*.so
 /web/ext/Makefile
-
-# Misc
-/.idea
+/web/.idea
 
