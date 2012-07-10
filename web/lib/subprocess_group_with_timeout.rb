@@ -1,6 +1,7 @@
 
-# Subprocess class aimed at running UML.
-class SubprocessWithTimeout
+# A subprocess group with a timeout that will kill the whole group.
+# Aimed at running UML.
+class SubprocessGroupWithTimeout
   def initialize(timeout, debug_log = nil, &block)
     @timeout = timeout
     @debug_log = debug_log || Logger.new('/dev/null')

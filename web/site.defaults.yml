@@ -1,12 +1,23 @@
 # NOTE: Don't edit this file. Create a `site.yml` and override the settings there instead.
 
-#
-# The relative or absolute path to the directory that contains linux.uml, initrd.img and rootfs.squashfs.
-# Multiple instances of the server may share the compiled files, since they're accessed read-only.
-# It's recommended to share the files when deploying to a single server, since otherwise
-# cache space is wasted.
-#
-sandbox_files_root: ../output
+# User and group to run non-privileged processes as.
+# These should own the web/ directory.
+tmc_user: tmc
+tmc_group: tmc
+
+# Maximum number of sandboxes to run simultaneously
+max_instances: 4
+
+# Networking creates a TAP device for each instance and runs a private copy of
+# dnsmasq and squid (HTTP proxy) on them. The TAP devices are named
+# tap_tmc0, tap_tmc1, etc. for each instance. They get private IP ranges
+# 192.168.100.*, 192.168.101.* etc (configurable_below).
+network:
+  enabled: true
+  private_ip_range_start: 100
+  dnsmasq: true
+  squid: true
+
 
 #
 # The amount of RAM for each user-mode linux instance.

@@ -1,7 +1,5 @@
 
-require './init.rb'
-require 'minitest/autorun'
-
+require File.dirname(File.realpath(__FILE__)) + '/test_helper.rb'
 require 'misc_utils'
 
 class MiscUtilsTest < MiniTest::Unit::TestCase

@@ -16,6 +16,7 @@
 # Webservice
 /web/site.yml
 /web/work
+/web/lock
 /web/*.log
 /web/*.pid
 /web/cache

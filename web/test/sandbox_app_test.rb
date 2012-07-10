@@ -1,15 +1,16 @@
-require 'minitest/autorun'
+require File.dirname(File.realpath(__FILE__)) + '/test_helper.rb'
 require "rack/test"
 require 'tempfile'
 require 'pathname'
 require 'fileutils'
 require 'multi_json'
+require 'hash_deep_merge'
 
-require './sandbox_app'
+require 'sandbox_app'
 require 'ext2_utils'
-require './test/mock_server'
+require 'mock_server'
 
-class WebappTest < MiniTest::Unit::TestCase
+class SandboxAppTest < MiniTest::Unit::TestCase
   include Rack::Test::Methods
   
   def app
@@ -21,7 +22,8 @@ class WebappTest < MiniTest::Unit::TestCase
   
   def make_new_app(options = {})
     options = {
-      'timeout' => '30'
+      'timeout' => 30,
+      'max_instances' => 1
     }.deep_merge(options)
     options['plugins'] = nil
     SandboxApp.new(options)
@@ -34,26 +36,26 @@ class WebappTest < MiniTest::Unit::TestCase
   def teardown
     @tempfiles.each {|f| f.unlink }
     if @app
-      @app.wait_for_runner_to_finish
+      @app.wait_for_instances_to_finish
     end
     SandboxApp.debug_log.debug "----- TEST FINISHED -----"
   end
   
   def test_runs_task_and_posts_back_notification_when_done
-    post_with_notify '/', :file => tar_fixture('successful'), :token => '123123'
+    post_with_notify '/task.json', :file => tar_fixture('successful'), :token => '123123'
     
     assert_equal 'application/x-www-form-urlencoded', @notify_content_type
-    
+
     assert_equal '123123', @notify_params['token']
     assert_equal 'finished', @notify_params['status']
     assert_equal '0', @notify_params['exit_code']
     assert_equal 'this is the test_output.txt of fixtures/successful', @notify_params['test_output'].strip
   end
-  
+
   def test_can_respond_to_multiple_requests
-    post_with_notify '/', :file => tar_fixture('successful'), :token => '123123'
+    post_with_notify '/task.json', :file => tar_fixture('successful'), :token => '123123'
     
-    post_with_notify '/', :file => tar_fixture('successful'), :token => '456456'
+    post_with_notify '/task.json', :file => tar_fixture('successful'), :token => '456456'
     
     assert_equal 'application/x-www-form-urlencoded', @notify_content_type
     
@@ -63,20 +65,38 @@ class WebappTest < MiniTest::Unit::TestCase
     assert_equal 'this is the test_output.txt of fixtures/successful', @notify_params['test_output'].strip
   end
   
-  def test_post_responds_busy_when_previous_task_running
-    post '/', :file => tar_fixture('sleeper')
+  def test_responds_busy_when_all_instances_are_busy
+    @app = make_new_app('max_instances' => 2)
+    post '/task.json', :file => tar_fixture('sleeper')
+    assert last_response.ok?
+    post '/task.json', :file => tar_fixture('sleeper')
     assert last_response.ok?
     
-    post '/', :file => tar_fixture('sleeper')
+    post '/task.json', :file => tar_fixture('sleeper')
     
     assert !last_response.ok?
     assert_equal 'busy', json_response['status']
     
-    app.kill_runner # finish faster
+    app.kill_instances # finish faster
+  end
+
+  def test_get_status
+    @app = make_new_app('max_instances' => 3)
+    post '/task.json', :file => tar_fixture('sleeper')
+    assert last_response.ok?
+    post '/task.json', :file => tar_fixture('sleeper')
+    assert last_response.ok?
+
+    get '/status.json'
+    assert last_response.ok?
+    assert_equal 2, json_response['busy_instances']
+    assert_equal 3, json_response['total_instances']
+
+    app.kill_instances # finish faster
   end
  
   def test_responds_with_error_on_bad_request
-    post '/', {} # no file parameter
+    post '/task.json', {} # no file parameter
     
     assert !last_response.ok?
     assert_equal 'bad_request', json_response['status']
@@ -85,14 +105,14 @@ class WebappTest < MiniTest::Unit::TestCase
   def test_task_may_time_out
     @app = make_new_app('timeout' => '1')
     
-    post_with_notify '/', :file => tar_fixture('sleeper')
+    post_with_notify '/task.json', :file => tar_fixture('sleeper')
     
     assert_equal 'timeout', @notify_params['status']
     assert_nil @notify_params['exit_code']
   end
   
   def test_failed_runs_may_have_output
-    post_with_notify '/', :file => tar_fixture('unsuccessful_with_output'), :token => '123123'
+    post_with_notify '/task.json', :file => tar_fixture('unsuccessful_with_output'), :token => '123123'
     
     assert_equal 'application/x-www-form-urlencoded', @notify_content_type
     
@@ -107,7 +127,7 @@ class WebappTest < MiniTest::Unit::TestCase
       ShellUtils.sh!(['fallocate', '-l', "8M", file.path])
       Ext2Utils.mke2fs(file.path)
       @app = make_new_app('extra_image_ubdd' => file.path)
-      post '/', :file => tar_fixture('sleeper')
+      post '/task.json', :file => tar_fixture('sleeper')
       assert last_response.ok?
       
       sleep 2
@@ -116,7 +136,7 @@ class WebappTest < MiniTest::Unit::TestCase
         assert_equal 0, file.flock(File::LOCK_SH | File::LOCK_NB)
         assert_equal 0, file.flock(File::LOCK_UN)
       ensure
-        @app.kill_runner
+        @app.kill_instances
       end
       
       # It takes a little while for locks to be released.
@@ -142,7 +162,7 @@ class WebappTest < MiniTest::Unit::TestCase
       Ext2Utils.mke2fs(file.path)
       @app = make_new_app('extra_image_ubdd' => file.path)
       
-      post_with_notify '/', :file => tar_fixture('use_ubdd')
+      post_with_notify '/task.json', :file => tar_fixture('use_ubdd')
       
       assert_equal 'finished', @notify_params['status']
       assert_equal '0', @notify_params['exit_code']
@@ -174,7 +194,7 @@ private
     srv = MockServer.new
     req_data = srv.interact do
       post sandbox_path, sandbox_params.merge(:notify => srv.url)
-      app.wait_for_runner_to_finish
+      app.wait_for_instances_to_finish
     end
     raise 'No data received from MockServer. Did the program send any?' if req_data == nil
     @notify_content_type = req_data['content_type']

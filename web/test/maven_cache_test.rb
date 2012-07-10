@@ -1,4 +1,4 @@
-require 'minitest/autorun'
+require File.dirname(File.realpath(__FILE__)) + '/test_helper.rb'
 require './sandbox_app'
 require './plugins/maven_cache'
 

@@ -2,7 +2,7 @@ require 'shellwords'
 
 module ShellUtils
   def sh!(cmd)
-    sh_preescaped!(Shellwords.join(cmd))
+    sh_preescaped!(Shellwords.join(cmd.map(&:to_s)))
   end
   
   def sh_preescaped!(cmd)
@@ -11,7 +11,7 @@ module ShellUtils
   end
   
   def system!(cmd)
-    cmd = Shellwords.join(cmd)
+    cmd = Shellwords.join(cmd.map(&:to_s))
     system(cmd)
     raise "Failed: #{cmd}. Exit code: #{$?.exitstatus}." if !$?.success?
   end

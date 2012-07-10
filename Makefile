@@ -27,10 +27,12 @@ web:
 clean:
 	make -C uml clean
 	cd web && rake clean
+	make -C misc clean
 
 distclean:
 	make -C uml distclean
 	cd web && rake clean
+	make -C misc distclean
 
 check:
 	echo "Running tests in web/"
