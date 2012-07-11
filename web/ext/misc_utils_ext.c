@@ -13,7 +13,7 @@ static VALUE misc_utils_module;
 static VALUE misc_utils_open_fds(VALUE mod);
 static VALUE misc_utils_cloexec(VALUE mod, VALUE fd);
 
-static VALUE signal_list;
+static VALUE signal_hash;
 static ID id_lookup;
 
 static VALUE misc_utils_wait_for_signal(int argc, VALUE *argv, VALUE mod);
@@ -28,11 +28,13 @@ void Init_misc_utils_ext()
     ID id_list = rb_intern("list");
 
     misc_utils_module = rb_define_module("MiscUtils");
+    rb_global_variable(&misc_utils_module);
 
     rb_define_module_function(misc_utils_module, "open_fds", &misc_utils_open_fds, 0);
     rb_define_module_function(misc_utils_module, "cloexec", &misc_utils_open_fds, 1);
 
-    signal_list = rb_funcall(signal_class, id_list, 0);
+    signal_hash = rb_funcall(signal_class, id_list, 0);
+    rb_global_variable(&signal_hash);
     id_lookup = rb_intern("[]");
 
     rb_define_module_function(misc_utils_module, "wait_for_signal", &misc_utils_wait_for_signal, -1);
@@ -134,7 +136,7 @@ static int signal_from_name(const char *name)
     }
 
     name_value = rb_str_new_cstr(name);
-    result = rb_funcall(signal_list, id_lookup, 1, name_value);
+    result = rb_funcall(signal_hash, id_lookup, 1, name_value);
     if (result == Qnil) {
         rb_raise(rb_eArgError, "Invalid signal name: %s", name);
     }
