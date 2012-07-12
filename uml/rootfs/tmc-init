@@ -110,6 +110,7 @@ else
   chmod -R u+rX $WORKDIR
 
   echo "Starting tmc-run"
+  chmod +x tmc-run
   EXIT_CODE=`( set +e; su tmc -c ./tmc-run > /dev/null 2>&1; echo $?; true )`
   echo "Completed tmc-run. Exit code: $EXIT_CODE"
   
