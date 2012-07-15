@@ -21,7 +21,7 @@ module ProcessUser
   end
 
   def drop_root_permanently!
-    Process::Sys.setreuid(Settings.tmc_user_id, Settings.tmc_user_id) if is_root?
+    Process::Sys.setreuid(Settings.tmc_user_id, Settings.tmc_user_id)
   end
 
   def as_root(&block)
