@@ -176,7 +176,7 @@ class SandboxApp
 private
   def serve_request
     begin
-      if @req.post? && @req.path == '/task.json'
+      if @req.post? && @req.path == '/tasks.json'
         serve_post_task
       elsif @req.get? && @req.path == '/status.json'
         serve_status

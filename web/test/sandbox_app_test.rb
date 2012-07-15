@@ -53,7 +53,7 @@ class SandboxAppTest < MiniTest::Unit::TestCase
   end
   
   def test_runs_task_and_posts_back_notification_when_done
-    post_with_notify '/task.json', :file => tar_fixture('successful'), :token => '123123'
+    post_with_notify '/tasks.json', :file => tar_fixture('successful'), :token => '123123'
     
     assert_equal 'application/x-www-form-urlencoded', @notify_content_type
 
@@ -64,9 +64,9 @@ class SandboxAppTest < MiniTest::Unit::TestCase
   end
 
   def test_can_respond_to_multiple_requests
-    post_with_notify '/task.json', :file => tar_fixture('successful'), :token => '123123'
+    post_with_notify '/tasks.json', :file => tar_fixture('successful'), :token => '123123'
     
-    post_with_notify '/task.json', :file => tar_fixture('successful'), :token => '456456'
+    post_with_notify '/tasks.json', :file => tar_fixture('successful'), :token => '456456'
     
     assert_equal 'application/x-www-form-urlencoded', @notify_content_type
     
@@ -78,12 +78,12 @@ class SandboxAppTest < MiniTest::Unit::TestCase
   
   def test_responds_busy_when_all_instances_are_busy
     @app = make_new_app('max_instances' => 2)
-    post '/task.json', :file => tar_fixture('sleeper')
+    post '/tasks.json', :file => tar_fixture('sleeper')
     assert last_response.ok?
-    post '/task.json', :file => tar_fixture('sleeper')
+    post '/tasks.json', :file => tar_fixture('sleeper')
     assert last_response.ok?
     
-    post '/task.json', :file => tar_fixture('sleeper')
+    post '/tasks.json', :file => tar_fixture('sleeper')
     
     assert !last_response.ok?
     assert_equal 'busy', json_response['status']
@@ -93,9 +93,9 @@ class SandboxAppTest < MiniTest::Unit::TestCase
 
   def test_get_status
     @app = make_new_app('max_instances' => 3)
-    post '/task.json', :file => tar_fixture('sleeper')
+    post '/tasks.json', :file => tar_fixture('sleeper')
     assert last_response.ok?
-    post '/task.json', :file => tar_fixture('sleeper')
+    post '/tasks.json', :file => tar_fixture('sleeper')
     assert last_response.ok?
 
     get '/status.json'
@@ -107,7 +107,7 @@ class SandboxAppTest < MiniTest::Unit::TestCase
   end
  
   def test_responds_with_error_on_bad_request
-    post '/task.json', {} # no file parameter
+    post '/tasks.json', {} # no file parameter
     
     assert !last_response.ok?
     assert_equal 'bad_request', json_response['status']
@@ -116,14 +116,14 @@ class SandboxAppTest < MiniTest::Unit::TestCase
   def test_task_may_time_out
     @app = make_new_app('timeout' => '1')
     
-    post_with_notify '/task.json', :file => tar_fixture('sleeper')
+    post_with_notify '/tasks.json', :file => tar_fixture('sleeper')
     
     assert_equal 'timeout', @notify_params['status']
     assert_nil @notify_params['exit_code']
   end
   
   def test_failed_runs_may_have_output
-    post_with_notify '/task.json', :file => tar_fixture('unsuccessful_with_output'), :token => '123123'
+    post_with_notify '/tasks.json', :file => tar_fixture('unsuccessful_with_output'), :token => '123123'
     
     assert_equal 'application/x-www-form-urlencoded', @notify_content_type
     
@@ -148,7 +148,7 @@ class SandboxAppTest < MiniTest::Unit::TestCase
     with_network(tapdev_for_sandbox) do
       ProcessUser.drop_root!
 
-      post_with_notify '/task.json', :file => tar_fixture('network_test'), :token => '123123'
+      post_with_notify '/tasks.json', :file => tar_fixture('network_test'), :token => '123123'
 
       assert_equal 'application/x-www-form-urlencoded', @notify_content_type
 
@@ -170,7 +170,7 @@ class SandboxAppTest < MiniTest::Unit::TestCase
       with_network([tapdev_for_sandbox, tapdev_for_maven_cache]) do
         ProcessUser.drop_root!
 
-        post_with_notify '/task.json', :file => tar_fixture('maven_project'), :token => '123'
+        post_with_notify '/tasks.json', :file => tar_fixture('maven_project'), :token => '123'
 
         assert_equal 'finished', @notify_params['status']
         assert_equal '0', @notify_params['exit_code']
@@ -179,7 +179,7 @@ class SandboxAppTest < MiniTest::Unit::TestCase
         mvn_cache = @app.plugin_manager.plugin('maven_cache')
         mvn_cache.wait_for_daemon
 
-        post_with_notify '/task.json', :file => tar_fixture('show_mvn_cache'), :token => '456'
+        post_with_notify '/tasks.json', :file => tar_fixture('show_mvn_cache'), :token => '456'
         assert_equal 'finished', @notify_params['status']
         assert_equal '0', @notify_params['exit_code']
         assert @notify_params['test_output'].include?("/ubdd/maven/repository/org/apache/commons/commons-io/1.3.2")
