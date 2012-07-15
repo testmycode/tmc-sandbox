@@ -1,5 +1,6 @@
 require 'paths'
 require 'subprocess_group_with_timeout'
+require 'shellwords'
 require 'app_log'
 
 class SandboxInstance
