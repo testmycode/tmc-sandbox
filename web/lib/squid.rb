@@ -98,7 +98,7 @@ refresh_pattern .		0	20%	4320
 cache_effective_user #{Settings.tmc_user}
 cache_effective_group #{Settings.tmc_group}
 
-shutdown_lifetime 5
+shutdown_lifetime 2 seconds
 EOS
     File.open(Paths.squid_config_path, 'wb') {|f| f.write(config)}
   end
