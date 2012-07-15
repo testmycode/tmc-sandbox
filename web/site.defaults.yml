@@ -1,17 +1,28 @@
 # NOTE: Don't edit this file. Create a `site.yml` and override the settings there instead.
 
+#
 # User and group to run non-privileged processes as.
 # These should own the web/ directory.
+#
 tmc_user: tmc
 tmc_group: tmc
 
+#
 # Maximum number of sandboxes to run simultaneously
+#
 max_instances: 4
 
+#
+# Webapp port
+#
+http_port: 3001
+
+#
 # Networking creates a TAP device for each instance and runs a private copy of
 # dnsmasq and squid (HTTP proxy) on them. The TAP devices are named
 # tap_tmc0, tap_tmc1, etc. for each instance. They get private IP ranges
 # 192.168.100.*, 192.168.101.* etc (configurable_below).
+#
 network:
   enabled: true
   private_ip_range_start: 100
@@ -37,23 +48,9 @@ max_output_size: 20M
 timeout: 120
 
 #
-# Extra parameters to user-mode-linux.
-# Can be used e.g. to configure virtual networks.
-# If you want to give many parameters then write them as a YAML array.
+# Log file.
 #
-extra_uml_args:
-
-#
-# A log file with debug information.
-#
-debug_log_file:
-
-#
-# An extra image file may be attached as ubdd.
-# If specified, it is mounted to /ubdd as AUFS read-only + writable RAMdisk,
-# like the root filesystem. The file will be non-exclusively flock()'ed while in use.
-#
-extra_image_ubdd:
+app_log_file: work/app.log
 
 #
 # Plugins and their configurations.
@@ -63,12 +60,6 @@ extra_image_ubdd:
 plugins:
   maven_cache:
     enabled: false
-    # Image files. Autocreated if necessary.
-    img1: cache/maven/1.img
-    img2: cache/maven/2.img
-    symlink: cache/maven/current.img
-    # The plugin will copy projects and create lockfiles here.
-    work_dir: cache/maven/work
     img_size: 1G  # When creating images if they don't exist
     tap_device: tap_mvncache
     tap_ip: 192.168.210.1

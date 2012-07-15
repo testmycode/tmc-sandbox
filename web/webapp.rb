@@ -11,6 +11,10 @@ require "#{File.dirname(File.realpath(__FILE__))}/init.rb"
 require 'settings'
 require 'tap_device'
 require 'misc_utils'
+require 'dnsmasq'
+require 'squid'
+require 'process_user'
+require 'signal_handlers'
 
 class WebappProgram
   def initialize
@@ -27,22 +31,10 @@ class WebappProgram
       run_preliminary_checks
       ignore_signals
 
-      begin
-        if network_enabled?
-          init_tapdevs
-          init_dnsmasq if dnsmasq_enabled?
-          init_squid if squid_enabled?
-        end
-        init_webapp
-
-        puts "Startup complete. Host process (#{Process.pid}) waiting for shutdown signal."
-        wait_for_signal
-      ensure
-        shutdown_webapp
-        if network_enabled?
-          shutdown_squid if squid_enabled?
-          shutdown_dnsmasq if dnsmasq_enabled?
-          shutdown_tapdevs
+      maybe_with_network do
+        with_webapp do
+          AppLog.info "Startup complete. Host process (#{Process.pid}) waiting for shutdown signal."
+          wait_for_signal
         end
       end
     end
@@ -70,14 +62,14 @@ private
   end
 
   def termination_signals
-    ["TERM", "INT", "HUP", "USR1", "USR2"]
+    SignalHandlers.termination_signals
   end
 
   def ignore_signals
     for signal in termination_signals
       Proc.new do |sig| # So the sig in trap's closure remains unchanged
         Signal.trap(sig) do
-          puts "Caught SIG#{sig}"
+          AppLog.info "Caught SIG#{sig}"
         end
       end.call(signal)
     end
@@ -87,138 +79,107 @@ private
     MiscUtils.wait_for_signal(*termination_signals)
   end
 
+  def with_webapp(&block)
+    init_webapp
+    begin
+      block.call
+    ensure
+      shutdown_webapp
+    end
+  end
+
   def init_webapp
-    #TODO: (and see if --pid makes it background. Don't want that.)
-    #bundle exec rackup --server webrick --port #{port} --pid webrick.pid >> webrick.log 2>&1
+    AppLog.info "Starting webapp"
+    @webapp_pid = Process.fork do
+      $stdin.reopen("/dev/null")
+      $stdout.reopen("#{Paths.work_dir}/webrick.log")
+      $stderr.reopen($stdout)
+      MiscUtils.cloexec_all_except([$stdin, $stdout, $stderr])
+      ProcessUser.drop_root_permanently!
+      cmd = [
+        'bundle',
+        'exec',
+        'rackup',
+        '--server',
+        'webrick',
+        '--port',
+        @settings['http_port']
+      ]
+      Process.exec(Shellwords.join(cmd.map(&:to_s)))
+    end
   end
 
   def shutdown_webapp
-    #TODO
+    AppLog.info "Stopping webapp"
+    if @webapp_pid
+      # Webrick expects SIGINT. It ignores SIGTERM. Webrick is a little bit strange that way.
+      Process.kill("INT", @webapp_pid)
+      Process.waitpid(@webapp_pid)
+      @webapp_pid = nil
+    end
+  end
+
+  def maybe_with_network(&block)
+    if network_enabled?
+      with_tapdevs do |tapdevs|
+        maybe_with_dnsmasq(tapdevs) do
+          maybe_with_squid(tapdevs) do
+            block.call
+          end
+        end
+      end
+    end
+  end
+
+  def with_tapdevs(&block)
+    tapdevs = init_tapdevs
+    begin
+      block.call(tapdevs)
+    ensure
+      shutdown_tapdevs(tapdevs)
+    end
   end
 
   def init_tapdevs
-    @tapdevs = []
+    tapdevs = []
     first_ip_range = @settings['network']['private_ip_range_start']
     instance_count.times do |i|
-      @tapdevs << TapDevice.new("tap_tmc#{i}", "192.168.#{first_ip_range + i}.1", tmc_user)
+      tapdevs << TapDevice.new("tap_tmc#{i}", "192.168.#{first_ip_range + i}.1", tmc_user)
     end
 
-    puts "Creating tap devices: #{@tapdevs.map(&:name).join(', ')}"
-    for tapdev in @tapdevs
+    if maven_cache_enabled?
+      maven_cache = @settings['plugins']['maven_cache']
+      tapdevs << TapDevice.new(maven_cache['tap_device'], maven_cache['tap_ip'], tmc_user)
+    end
+
+    AppLog.info "Creating tap devices: #{tapdevs.map(&:name).join(', ')}"
+    for tapdev in tapdevs
       tapdev.create if !tapdev.exist?
       tapdev.up
     end
+
+    tapdevs
   end
 
-  def shutdown_tapdevs
-    puts "Destroying tap devices: #{@tapdevs.map(&:name).join(', ')}"
-    @tapdevs.each(&:down)
-    @tapdevs.each(&:destroy)
-    @tapdevs = []
+  def shutdown_tapdevs(tapdevs)
+    AppLog.info "Destroying tap devices: #{tapdevs.map(&:name).join(', ')}"
+    tapdevs.each(&:down)
+    tapdevs.each(&:destroy)
   end
 
-  def init_dnsmasq
-    puts "Starting dnsmasq"
-    pid_file = Paths.work_dir + 'dnsmasq.pid'
-    cmd = [
-      Paths.dnsmasq_path.to_s,
-      "--keep-in-foreground",
-      "--conf-file=-", #don't use global conf file
-      "--user=#{tmc_user}",
-      "--group=#{tmc_group}",
-      "--pid-file=#{pid_file}",
-      "--bind-interfaces",
-      "--domain-needed", # Prevent lookups on local network. Might help avoid leaking info about network.
-      "--no-hosts"
-    ]
-
-    cmd += @tapdevs.map {|dev| "--interface=#{dev.name}" }
-    cmd += @tapdevs.map {|dev| "--no-dhcp-interface=#{dev.name}" }
-
-    @dnsmasq_pid = Process.fork do
-      $stdin.reopen("/dev/null")
-      Process.exec(*cmd)
-    end
-    puts "Dnsmasq started as #{@dnsmasq_pid}"
-  end
-
-  def shutdown_dnsmasq
-    if @dnsmasq_pid
-      puts "Shutting down dnsmasq"
-      Process.kill("SIGTERM", @dnsmasq_pid)
-      Process.waitpid(@dnsmasq_pid)
+  def maybe_with_dnsmasq(tapdevs, &block)
+    if dnsmasq_enabled?
+      Dnsmasq.with_dnsmasq(tapdevs, &block)
+    else
+      block.call
     end
   end
 
-  def init_squid
-    puts "Starting squid"
-    write_squid_config_file
-
-    cmd = [Paths.squid_path.to_s, "-d", "error", "-N"]
-
-    @squid_pid = Process.fork do
-      $stdin.reopen("/dev/null")
-      $stdout.reopen(Paths.squid_log_path, 'a')
-      $stderr.reopen($stdout)
-      Process.exec(*cmd)
-    end
-    puts "Squid started as #{@squid_pid}"
-  end
-
-  def write_squid_config_file
-    config = <<EOS
-acl manager proto cache_object
-acl localhost src 127.0.0.1/32 ::1
-acl to_localhost dst 127.0.0.0/8 0.0.0.0/32 ::1
-
-acl SSL_ports port 443
-acl Safe_ports port 80		# http
-acl Safe_ports port 8080  # alternative http
-acl Safe_ports port 443		# https
-acl Safe_ports port 1025-65535	# unregistered ports
-acl Safe_ports port 280		# http-mgmt
-acl Safe_ports port 488		# gss-http
-acl Safe_ports port 591		# filemaker
-acl Safe_ports port 777		# multiling http
-acl CONNECT method CONNECT
-EOS
-
-    for dev in @tapdevs
-      config += "acl localnet src #{dev.subnet}\n"
-    end
-
-    config += <<EOS
-http_access allow manager localhost
-http_access deny manager
-http_access deny !Safe_ports
-http_access deny CONNECT !SSL_ports
-
-http_access deny to_localhost
-http_access allow localnet
-http_access allow localhost
-
-http_access deny all
-
-http_port 3128
-
-cache_dir ufs #{Paths.squidroot_dir}/var/cache 100 16 256
-
-coredump_dir #{Paths.squidroot_dir}/var/cache
-
-refresh_pattern -i (/cgi-bin/|\?) 0	0%	0
-refresh_pattern .		0	20%	4320
-
-cache_effective_user #{tmc_user}
-cache_effective_group #{tmc_group}
-EOS
-    File.open(Paths.squid_config_path, 'wb') {|f| f.write(config)}
-  end
-
-  def shutdown_squid
-    if @squid_pid
-      puts "Shutting down squid"
-      Process.kill("SIGTERM", @squid_pid)
-      Process.waitpid(@squid_pid)
+  def maybe_with_squid(tapdevs, &block)
+    if squid_enabled?
+      Squid.with_squid(tapdevs, &block)
+    else
+      block.call
     end
   end
 
@@ -244,6 +205,10 @@ EOS
 
   def dnsmasq_enabled?
     @settings['network']['squid']
+  end
+
+  def maven_cache_enabled?
+    @settings['plugins']['maven_cache']['enabled']
   end
 end
 

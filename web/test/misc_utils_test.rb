@@ -1,8 +1,14 @@
 
 require File.dirname(File.realpath(__FILE__)) + '/test_helper.rb'
 require 'misc_utils'
+require 'process_user'
 
 class MiscUtilsTest < MiniTest::Unit::TestCase
+  def setup
+    ProcessUser.drop_root!
+    super
+  end
+
   def test_open_fds
     # We don't know exactly what MiniTest or our environment might open,
     # so we can't justassert_equals.

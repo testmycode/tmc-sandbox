@@ -1,12 +1,17 @@
+require 'sandbox_app'
 require 'fileutils'
 require 'tempfile'
 require 'tmpdir'
 require 'shellwords'
+require 'digest'
 
 require 'shell_utils'
 require 'ext2_utils'
 require 'closeable_wrapper'
-require 'subprocess_with_timeout'
+require 'subprocess_group_with_timeout'
+require 'disk_cache'
+require 'paths'
+require 'signal_handlers'
 
 #
 # Recognizes Maven projects and downloads their dependencies to a local repository
@@ -32,14 +37,17 @@ require 'subprocess_with_timeout'
 # usable state and the daemon will eventually be started again and try again,
 # until an administrator resolves the situation. TODO: better error reporting
 #
+# The cache may be explicitly populated by POSTing a tar file with a pom.xml as
+# the file parameter to /maven_cache/populate.json.
+#
 # System requirements:
 # 
 # A squid proxy must be configured with a dedicated TAP device for this plugin.
-# See site.defaults.yml and the readme.
+# See site.defaults.yml.
 #
 # Implementation details:
 # 
-# To reduce contention and unnecessary swaps, the plugin starts a daemon (at most one even if workdir is shared).
+# To reduce contention and unnecessary swaps, the plugin starts a daemon.
 # The daemon processes Maven projects dropped into the workdir until it's empty. Then it exits.
 # To prevent race conditions, the workdir is protected by a lock.
 # The lock is acquired before writing to the workdir and trying to start the daemon.
@@ -49,11 +57,18 @@ require 'subprocess_with_timeout'
 class MavenCache < SandboxApp::Plugin
   def initialize(*args)
     super
-    
-    @img1path = abspath_mkdir(@plugin_settings['img1'])
-    @img2path = abspath_mkdir(@plugin_settings['img2'])
-    @symlink = abspath_mkdir(@plugin_settings['symlink'])
-    @work_dir = abspath_mkdir(@plugin_settings['work_dir'])
+
+    if @plugin_settings['alternate_work_dir']
+      @work_dir = Pathname(@plugin_settings['alternate_work_dir'])
+    else
+      @work_dir = Paths.work_dir + 'maven_cache'
+    end
+    FileUtils.mkdir_p(@work_dir)
+    @work_dir = @work_dir.realpath.to_s
+
+    @img1path = "#{@work_dir}/1.img"
+    @img2path = "#{@work_dir}/2.img"
+    @symlink = "#{@work_dir}/current.img"
     @tap_device = @plugin_settings['tap_device']
     @tap_ip = @plugin_settings['tap_ip']
     
@@ -67,13 +82,21 @@ class MavenCache < SandboxApp::Plugin
     @log_tar_path = "#{@work_dir}/log.tar"
     @rsync_log_tar_path = "#{@work_dir}/rsync-log.tar"
     @tasks_lock = "#{@work_dir}/tasks.lock"
-    @tasks_pidfile = "#{@work_dir}/tasks.pid"
+    @daemon_pidfile = "#{@work_dir}/daemon.pid"
     
     @maven_projects_seen = 0
+    @maven_projects_skipped_immediately = 0
     @daemon_start_count = 0
+
+    @projects_seen_cache = DiskCache.get("maven_projects_seen")
+    if [@img1path, @img2path].any? {|path| !File.exist?(path) }
+      AppLog.debug "Maven cache clearing projects_seen_cache since image file(s) don't exist"
+      @projects_seen_cache.clear
+    end
   end
   
   attr_reader :maven_projects_seen
+  attr_reader :maven_projects_skipped_immediately
   attr_reader :daemon_start_count
 
   def before_exec(options)
@@ -81,17 +104,61 @@ class MavenCache < SandboxApp::Plugin
   end
   
   def start_caching_deps(tar_file)
-    if `tar -tf #{tar_file}`.strip.split("\n").any? {|f| f == 'pom.xml' || f == './pom.xml' }
+    if maven_project?(tar_file)
       @maven_projects_seen += 1
-      add_task(tar_file)
+      if !can_skip?(tar_file)
+        add_task(tar_file)
+      else
+        @maven_projects_skipped_immediately += 1
+        AppLog.debug "Maven project's deps already cached. Skipping."
+      end
     end
+  end
+
+  def kill_daemon_if_running
+    File.open(@daemon_pidfile, File::RDONLY | File::CREAT) do |pidfile|
+      begin
+        pid = pidfile.read.strip.to_i
+        AppLog.debug("Killing maven cache daemon (pid #{pid})")
+        Process.kill("TERM", pid) if pid > 0
+      rescue
+        # nothing
+      end
+    end
+  end
+
+  def daemon_running?
+    running = false
+    File.open(@daemon_pidfile, File::RDONLY | File::CREAT) do |pidfile|
+      running = !pidfile.flock(File::LOCK_EX | File::LOCK_NB)
+      pidfile.flock(File::LOCK_UN)
+    end
+    running
   end
   
   def wait_for_daemon
-    File.open(@tasks_pidfile, File::WRONLY | File::CREAT) do |pidfile|
+    File.open(@daemon_pidfile, File::RDONLY | File::CREAT) do |pidfile|
       pidfile.flock(File::LOCK_EX)
       pidfile.flock(File::LOCK_UN)
     end
+  end
+
+  def extra_images(options)
+    if File.exist?(@symlink)
+      {'ubddrc' => @symlink}
+    else
+      {}
+    end
+  end
+
+  def can_serve_request?(req)
+    req.post? && req.path == '/maven_cache/populate.json'
+  end
+
+  def serve_request(req, resp, respdata)
+    raise SandboxApp::BadRequest.new('missing file parameter') if !req['file'] || !req['file'][:tempfile]
+    start_caching_deps(req['file'][:tempfile].path)
+    respdata[:status] = 'ok'
   end
   
 private
@@ -99,8 +166,9 @@ private
   class ImageFile
     def initialize(path, default_size)
       @path = path
-      
+
       create(default_size) if !File.exist?(@path)
+
       @imghandle = File.open(@path, File::RDONLY)
       @lock_mode = nil
     end
@@ -139,7 +207,10 @@ private
       @img1 = img1
       @img2 = img2
       @symlink = symlink
-      File.symlink(img1.path, symlink) if !File.exist?(symlink)
+      if !File.exist?(symlink)
+        AppLog.debug "Creating symlink #{symlink} -> #{img1.path}"
+        File.symlink(img1.path, symlink)
+      end
       raise "#{symlink} should be a symlink" if !File.symlink?(symlink)
     end
     
@@ -162,6 +233,7 @@ private
     def unlock_both_and_swap
       unlock_front
       unlock_back
+      AppLog.debug "Setting symlink #{@symlink} -> #{backimg.path}"
       set_symlink_atomic(backimg.path)
     end
     
@@ -201,15 +273,27 @@ private
       end
     end
   end
-  
 
-  def abspath_mkdir(path)
-    dir = File.dirname(path)
-    basename = File.basename(path)
-    FileUtils.mkdir_p(dir)
-    "#{File.realpath(dir)}/#{basename}"
+  def maven_project?(tar_file)
+    `tar -tf #{tar_file}`.strip.split("\n").any? {|f| f == 'pom.xml' || f == './pom.xml' }
   end
-  
+
+  def can_skip?(tar_file)
+    @projects_seen_cache.get(checksum_pom_xml(tar_file)) != nil
+  end
+
+  def mark_pom_file_processed_in_cache(tar_file)
+    @projects_seen_cache.put(checksum_pom_xml(tar_file), '1')
+  end
+
+  def checksum_pom_xml(tar_file)
+    list_cmd = Shellwords.join(['tar', '-tf', tar_file])
+    pom_file_name = `#{list_cmd}`.strip.split("\n").find {|f| f == 'pom.xml' || f == './pom.xml' }
+    extract_cmd = Shellwords.join(['tar', '--to-stdout', '-xf', tar_file, pom_file_name])
+    pom_xml = `#{extract_cmd}`
+    Digest::SHA2.hexdigest(pom_xml)
+  end
+
   def add_task(tar_file)
     with_flock(@tasks_lock) do |tasks_lock_file|
       task_file = Tempfile.new(["task", ".tar"], @tasks_dir)
@@ -231,7 +315,7 @@ private
   end
   
   def start_daemon_unless_running(files_to_close)
-    pidfile = File.open(@tasks_pidfile, File::WRONLY | File::CREAT)
+    pidfile = File.open(@daemon_pidfile, File::WRONLY | File::CREAT)
     if pidfile.flock(File::LOCK_EX | File::LOCK_NB) == 0
       begin
         @daemon_start_count += 1
@@ -239,9 +323,15 @@ private
           begin
             files_to_close.each(&:close) # relinquishes this copy of flock
             run_daemon
+          rescue
+            AppLog.error "Maven cache daemon crashed: #{AppLog.fmt_exception($!)}"
           ensure
-            pidfile.close
-            File.delete(pidfile)
+            begin
+              pidfile.close
+              File.delete(@daemon_pidfile)
+            ensure
+              exit!(0)
+            end
           end
         end
         pidfile.truncate(0)
@@ -254,12 +344,12 @@ private
   end
   
   def run_daemon
-    SandboxApp.debug_log.debug "Maven cache daemon starting."
+    AppLog.debug "Maven cache daemon starting."
     
     img1 = CloseableWrapper.new(ImageFile.new(@img1path, @plugin_settings['img_size']))
     img2 = CloseableWrapper.new(ImageFile.new(@img2path, @plugin_settings['img_size']))
     imgpair = CloseableWrapper.new(ImagePair.new(img1, img2, @symlink))
-    
+
     imgpair.lock_back_rw
     
     begin
@@ -273,6 +363,7 @@ private
           if file != nil
             FileUtils.mv("#{@tasks_dir}/#{file}", @current_task_path)
           else
+            AppLog.debug "Maven cache daemon sees no more tasks."
             exiting = true
           end
         end
@@ -280,11 +371,15 @@ private
         if exiting
           imgpair.unlock_both_and_swap
           imgpair.lock_back_rw
-          
+
           imgpair.lock_front_ro
-          Ext2Utils.fsck(imgpair.frontimg.path)
-          rsync(imgpair.frontimg.path, imgpair.backimg.path)
-          imgpair.unlock_front
+          begin
+            Ext2Utils.fsck(imgpair.frontimg.path)
+            AppLog.debug "Ryncing from  #{imgpair.frontimg.path} to #{imgpair.backimg.path}"
+            rsync(imgpair.frontimg.path, imgpair.backimg.path)
+          ensure
+            imgpair.unlock_front
+          end
           
           # Check if a new task has appeared while we were swapping and rsyncing.
           # If so, we must not exit yet, since no daemon would then handle the task.
@@ -292,7 +387,7 @@ private
             if (Dir.entries(@tasks_dir) - ['.', '..']).empty?
               # Exit while holding tasksdir lock.
               # Prevents the race where a sandbox adds a task but sees the exiting daemon as active.
-              SandboxApp.debug_log.debug "Maven cache daemon has processed all tasks and exits."
+              AppLog.debug "Maven cache daemon exiting."
               exit!(0)
             else
               # More tasks appeared while rsyncing. Continue.
@@ -300,12 +395,17 @@ private
             end
           end
         else
-          # TODO: short-circuit if we've seen the exact same POM before.
-          # Is there an easy-to-configure disk-backed cache library we can call here?
-          # Most importantly we need max lifetime
-          
-          SandboxApp.debug_log.debug "Downloading Maven dependencies into #{imgpair.backimg.path}"
-          download_deps(@current_task_path, imgpair.backimg.path)
+          if !can_skip?(@current_task_path)
+            AppLog.debug "Downloading Maven dependencies into #{imgpair.backimg.path}"
+            if download_deps(@current_task_path, imgpair.backimg.path)
+              AppLog.debug "Dependencies downloaded successfully"
+              mark_pom_file_processed_in_cache(@current_task_path)
+            else
+              AppLog.warn "Failed to download dependencies"
+            end
+          else
+            AppLog.debug "Skipping downloading Maven dependencies. This project was recently downloaded."
+          end
           FileUtils.rm_f(@current_task_path)
         end
         
@@ -326,19 +426,17 @@ private
   def run_uml_script(command, log_tar_path, ro_image, rw_image)
     prepare_script_tar_file(command)
     prepare_empty_log_tar_file(log_tar_path, "4M")
-  
-    root = @settings['sandbox_files_root']
-    
-    subprocess = SubprocessWithTimeout.new(@plugin_settings['download_timeout'].to_i, SandboxApp.debug_log) do
+
+    subprocess = SubprocessGroupWithTimeout.new(@plugin_settings['download_timeout'].to_i, AppLog.get) do
       $stdin.close
       $stdout.reopen("/dev/null", "w")
       $stderr.reopen($stdout)
       
       cmd = []
-      cmd << "#{root}/linux.uml"
-      cmd << "initrd=#{root}/initrd.img"
+      cmd << Paths.kernel_path
+      cmd << "initrd=#{Paths.initrd_path}"
       cmd << "mem=256M"
-      cmd << "ubdarc=#{root}/rootfs.squashfs"
+      cmd << "ubdarc=#{Paths.rootfs_path}"
       cmd << "ubdbr=#{@script_tar_path}"
       cmd << "ubdc=#{log_tar_path}"
       cmd << "ubdd=#{ro_image}" if ro_image
@@ -347,13 +445,41 @@ private
       cmd << "eth0=tuntap,#{@tap_device},,#{@tap_ip}"
       cmd << "run_tarred_script:/dev/ubdb"
       cmd << "con=null"
-      
+
+      # Increase the nicelevel (lower the priority) of this process
+      oldprio = Process.getpriority(Process::PRIO_PROCESS, 0)
+      Process.setpriority(Process::PRIO_PROCESS, 0, oldprio + 5)
+
       MiscUtils.cloexec_all_except([$stdout, $stderr])
-      Process.exec(Shellwords.join(cmd))
+      Process.exec(Shellwords.join(cmd.map(&:to_s)))
     end
-    
-    subprocess.start
-    subprocess.wait
+
+    pin, pout = IO.pipe
+    subprocess.when_done do |status|
+      pin.close
+      if status == :timeout
+        output = '0'
+      else
+        output = if status.success? then '1' else '0' end
+      end
+      pout.write(output)
+      pout.close
+    end
+
+    success = false
+    SignalHandlers.with_trap(SignalHandlers.termination_signals, lambda { subprocess.kill }) do
+      subprocess.start
+      pout.close
+      begin
+        success = (pin.read == '1')
+        pin.close
+      rescue
+        success = false
+      end
+      subprocess.wait
+    end
+
+    success
   end
   
   def prepare_script_tar_file(command)

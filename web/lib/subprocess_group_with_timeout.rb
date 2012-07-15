@@ -1,24 +1,33 @@
+require 'signal_handlers'
 
 # A subprocess group with a timeout that will kill the whole group.
 # Aimed at running UML.
 class SubprocessGroupWithTimeout
-  def initialize(timeout, debug_log = nil, &block)
+  def initialize(timeout, log = nil, &block)
     @timeout = timeout
-    @debug_log = debug_log || Logger.new('/dev/null')
+    @log = log || Logger.new('/dev/null')
     @block = block
     @after_block = lambda {|ignore| }
+
+    @signal_handler = lambda do |sig|
+      Process.kill(sig, @intermediate_pid) if @intermediate_pid != nil
+    end
     
     @intermediate_pid = nil
   end
   
-  # Runs block in an intermediate subprocess immediately after the main subprocess finishes or times out
+  # Runs block in an intermediate subprocess immediately after
+  # the main subprocess finishes or times out.
+  # Gives status of main process or :timeout as parameter
   def when_done(&block)
     @after_block = block
   end
-  
+
   def start
     raise 'previous run not waited nor killed' if @intermediate_pid
-    
+
+    SignalHandlers.add_trap(SignalHandlers.termination_signals, @signal_handler)
+
     pipe_in, pipe_out = IO.pipe
     
     @intermediate_pid = Process.fork do
@@ -44,7 +53,7 @@ class SubprocessGroupWithTimeout
         pipe_out.close
         sleep @timeout
       end
-      @debug_log.debug "PIDS: Intermediate(#{Process.pid}), Worker(#{worker_pid}), Timeout(#{timeout_pid})"
+      @log.debug "PIDS: Intermediate(#{Process.pid}), Worker(#{worker_pid}), Timeout(#{timeout_pid})"
       
       Signal.trap("SIGTERM") do
         Process.kill("KILL", timeout_pid)
@@ -59,22 +68,23 @@ class SubprocessGroupWithTimeout
       Signal.trap("SIGTERM", "SIG_DFL")
       
       if finished_pid == worker_pid
-        @debug_log.debug "Worker finished with status #{status.inspect}"
+        @log.debug "Worker finished with status #{status.inspect}"
         Process.kill("KILL", timeout_pid)
         Process.waitpid(timeout_pid)
       else
-        @debug_log.debug "Worker timed out."
+        @log.debug "Worker timed out."
         Process.kill("KILL", -worker_pid) # kill whole process group
         status = :timeout
       end
       
       @after_block.call(status)
     end
-    
+
     pipe_out.close
     if pipe_in.read != "ready for SIGTERM"
       Process.kill("KILL", @intermediate_pid)
       Process.waitpid(@intermediate_pid)
+      SignalHandlers.remove_trap(SignalHandlers.termination_signals, @signal_handler)
       raise "intermediate PID did not start properly"
     end
     pipe_in.close
@@ -87,19 +97,20 @@ class SubprocessGroupWithTimeout
   
   def wait(block = true)
     if @intermediate_pid
-      @debug_log.debug "Waiting for runner (#{@intermediate_pid}) to stop (blocking = #{block})"
+      @log.debug "Waiting for runner (#{@intermediate_pid}) to stop (blocking = #{block})"
       
       pid, status = Process.waitpid2(@intermediate_pid, if block then 0 else Process::WNOHANG end)
       if pid != nil
-        @debug_log.debug "Runner (#{@intermediate_pid}) stopped. Status: #{status.inspect}."
+        @log.debug "Runner (#{@intermediate_pid}) stopped. Status: #{status.inspect}."
         @intermediate_pid = nil
+        SignalHandlers.remove_trap(SignalHandlers.termination_signals, @signal_handler)
       end
     end
   end
   
   def kill
     if @intermediate_pid
-      @debug_log.debug "Killing runner (#{@intermediate_pid}) process group"
+      @log.debug "Killing runner (#{@intermediate_pid}) process group"
       Process.kill("TERM", @intermediate_pid)
       wait
     end

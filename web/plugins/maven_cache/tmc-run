@@ -23,13 +23,16 @@ case "$COMMAND" in
     mount -o rw $RW_IMAGE /mnt/rw
     chown tmc /mnt/rw # in case it's the first mount
     
-    mkdir -p /home/tmc
-    chown tmc /home/tmc
-    
     export EXERCISE_TAR="$RO_IMAGE"
     chmod +x /tmc/getdeps.sh
-    su tmc -c /tmc/getdeps.sh || true
+
+    set +e
+    su tmc -c /tmc/getdeps.sh
+    EXIT_CODE=$?
+    set -e
+
     umount /mnt/rw
+    exit $EXIT_CODE
     ;;
   rsync)
     mount -o ro $RO_IMAGE /mnt/ro

@@ -1,10 +1,12 @@
 source 'http://rubygems.org'
 
+gem 'rake'
 gem 'rack'
 gem 'multi_json'
 gem 'lockfile'
 gem 'activesupport'
 gem 'hash-deep-merge'
+gem 'sqlite3'
 
 gem 'test-unit'
 gem 'rack-test'

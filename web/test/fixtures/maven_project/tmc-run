@@ -1,0 +1,14 @@
+#!/bin/sh -e
+
+MOUNTED_MVN=/ubdd/maven
+if [ -d $MOUNTED_MVN/repository ]; then
+  # Use maven cache
+  ln -s $MOUNTED_MVN ~/.m2
+  if [ -f $MOUNTED_MVN/settings.xml ]; then
+    cp $MOUNTED_MVN/settings.xml ~/.m2/settings.xml
+  fi
+fi
+
+mvn -e tmc:test || true
+mv target/test_output.txt ./
+exit 0

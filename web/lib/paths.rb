@@ -55,7 +55,7 @@ module Paths
     squidroot_dir + 'etc' + 'squid.conf'
   end
 
-  def squid_log_path
-    work_dir + 'squid.log'
+  def squid_startup_log_path
+    work_dir + 'squid-startup.log'
   end
 end

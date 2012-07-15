@@ -1,52 +1,63 @@
 require 'paths'
 require 'subprocess_group_with_timeout'
+require 'app_log'
 
 class SandboxInstance
+  attr_reader :index
+
   def initialize(index, settings, plugin_manager)
     @index = index
     @settings = settings
     @plugin_manager = plugin_manager
     nuke_work_dir!
 
-    @subprocess = SubprocessGroupWithTimeout.new(@settings['timeout'].to_i, SandboxApp.debug_log) do
-      $stdin.close
-      $stdout.reopen("#{vm_log_path}", "w")
-      $stderr.reopen($stdout)
-      nocloexec = [$stdout, $stderr]
+    @subprocess = SubprocessGroupWithTimeout.new(@settings['timeout'].to_i, AppLog) do
+      begin
+        $stdin.close
+        $stdout.reopen("#{vm_log_path}", "w")
+        $stderr.reopen($stdout)
+        nocloexec = [$stdout, $stderr]
 
-      `dd if=/dev/zero of=#{output_tar_path} bs=#{@settings['max_output_size']} count=1`
-      exit!(1) unless $?.success?
+        `dd if=/dev/zero of=#{output_tar_path} bs=#{@settings['max_output_size']} count=1`
+        exit!(201) unless $?.success?
 
-      args = [
-        "#{Paths.kernel_path}",
-        "initrd=#{Paths.initrd_path}",
-        "ubdarc=#{Paths.rootfs_path}",
-        "ubdbr=#{@tar_file.path}",
-        "ubdc=#{output_tar_path}",
-        "mem=#{@settings['instance_ram']}",
-        "con=null"
-      ]
-      if @settings['extra_image_ubdd']
-        ubdd = @settings['extra_image_ubdd']
-        debug "Using #{ubdd} as ubdd"
-        args << "ubddrc=#{ubdd}"
-        ubdd_file = File.open(ubdd, File::RDONLY)
-        ubdd_file.flock(File::LOCK_SH) # Released when UML exits
-        nocloexec << ubdd_file
+        args = [
+          "#{Paths.kernel_path}",
+          "initrd=#{Paths.initrd_path}",
+          "ubdarc=#{Paths.rootfs_path}",
+          "ubdbr=#{@tar_file}",
+          "ubdc=#{output_tar_path}",
+          "mem=#{@settings['instance_ram']}",
+          "con=null"
+        ]
+
+        for name, path in @plugin_images
+          debug "Adding #{name}=#{path}"
+          if name =~ /^(ubd.)(r?)(c?)$/
+            args << "#{name}=#{path}"
+
+            lock_type = if $2 == 'r' then File::LOCK_SH else File::LOCK_EX end
+            f = File.open(path, File::RDONLY)
+            f.flock(lock_type)
+            nocloexec << f
+          else
+            error "Error in plugin_images"
+            exit!(202)
+          end
+        end
+
+        args += network_args
+
+        cmd = Shellwords.join(args)
+
+        debug "PID #{Process.pid} executing: #{cmd}"
+        MiscUtils.cloexec_all_except(nocloexec)
+        Process.exec(cmd)
+      rescue
+        error("Sandbox execution failed: " + AppLog.fmt_exception($!))
+      ensure
+        exit!(210)
       end
-      if @settings['extra_uml_args'].is_a?(Enumerable)
-        args += @settings['extra_uml_args']
-      elsif @settings['extra_uml_args'].is_a?(String)
-        args << @settings['extra_uml_args']
-      end
-
-      #TODO: networking
-
-      cmd = Shellwords.join(args)
-
-      debug "PID #{Process.pid} executing: #{cmd}"
-      MiscUtils.cloexec_all_except(nocloexec)
-      Process.exec(cmd)
     end
 
     @subprocess.when_done do |process_status|
@@ -92,7 +103,9 @@ class SandboxInstance
     @tar_file = tar_file
     @notifier = notifier
 
-    @plugin_manager.run_hook(:before_exec, :tar_file => @tar_file)
+    @plugin_images = @plugin_manager.run_hook(:extra_images, :instance => self).reduce({}, &:merge)
+
+    @plugin_manager.run_hook(:before_exec, :instance => self, :tar_file => tar_file)
     @subprocess.start
   end
 
@@ -146,6 +159,18 @@ private
     end
   end
 
+  def network_args
+    if @settings['network'] && @settings['network']['enabled']
+      i = @index
+      tapdev = "tap_tmc#{i}"
+      ip_range_start = @settings['network']['private_ip_range_start']
+      ip = "192.168.#{ip_range_start + i}.1"
+      ["eth0=tuntap,#{tapdev},,#{ip}"]
+    else
+      []
+    end
+  end
+
   def debug(msg)
     log_with_level(:debug, msg)
   end
@@ -154,7 +179,11 @@ private
     log_with_level(:warn, msg)
   end
 
+  def error(msg)
+    log_with_level(:error, msg)
+  end
+
   def log_with_level(level, msg)
-    SandboxApp.debug_log.send(level, "Instance #{@index}: #{msg}")
+    AppLog.send(level, "Instance #{@index}: #{msg}")
   end
 end

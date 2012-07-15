@@ -9,9 +9,13 @@ require 'hash_deep_merge'
 require 'sandbox_app'
 require 'ext2_utils'
 require 'mock_server'
+require 'process_user'
+require 'shell_utils'
+require 'test_network_setup'
 
 class SandboxAppTest < MiniTest::Unit::TestCase
   include Rack::Test::Methods
+  include TestNetworkSetup
   
   def app
     if !@app
@@ -19,17 +23,24 @@ class SandboxAppTest < MiniTest::Unit::TestCase
     end
     @app
   end
-  
+
   def make_new_app(options = {})
     options = {
       'timeout' => 30,
-      'max_instances' => 1
+      'max_instances' => 1,
+      'plugins' => nil,
+      'network' => nil,
+      'app_log_file' => nil
     }.deep_merge(options)
-    options['plugins'] = nil
     SandboxApp.new(options)
   end
   
   def setup
+    ProcessUser.drop_root!
+
+    ShellUtils.sh!(['chown', Settings.tmc_user, Paths.work_dir + 'test.log'])
+    ProcessUser.drop_root!
+    AppLog.set(Logger.new(Paths.work_dir + 'test.log'))
     @tempfiles = []
   end
   
@@ -38,7 +49,7 @@ class SandboxAppTest < MiniTest::Unit::TestCase
     if @app
       @app.wait_for_instances_to_finish
     end
-    SandboxApp.debug_log.debug "----- TEST FINISHED -----"
+    AppLog.debug "----- TEST FINISHED -----"
   end
   
   def test_runs_task_and_posts_back_notification_when_done
@@ -121,53 +132,117 @@ class SandboxAppTest < MiniTest::Unit::TestCase
     assert_equal '42', @notify_params['exit_code']
     assert_equal 'this is the test_output.txt of fixtures/unsuccessful_with_output', @notify_params['test_output'].strip
   end
-  
-  def test_ubdd_locking
-    Tempfile.open('ubdd.img') do |file|
-      ShellUtils.sh!(['fallocate', '-l', "8M", file.path])
-      Ext2Utils.mke2fs(file.path)
-      @app = make_new_app('extra_image_ubdd' => file.path)
-      post '/task.json', :file => tar_fixture('sleeper')
-      assert last_response.ok?
-      
-      sleep 2
-      begin
-        assert_equal false, file.flock(File::LOCK_EX | File::LOCK_NB)
-        assert_equal 0, file.flock(File::LOCK_SH | File::LOCK_NB)
-        assert_equal 0, file.flock(File::LOCK_UN)
-      ensure
-        @app.kill_instances
-      end
-      
-      # It takes a little while for locks to be released.
-      # Possibly because UML's children aren't wait()'ed instantly by init.
-      start = Time.now
-      ok = false
-      while Time.now <= start + 2
-        if file.flock(File::LOCK_EX | File::LOCK_NB) == 0
-          file.flock(File::LOCK_UN)
-          ok = true
-          break
-        else
-          sleep 0.01
-        end
-      end
-      fail 'Failed to lock file after UML died.' if !ok
+
+  def test_network
+    if !ProcessUser.can_become_root?
+      warn "sandbox_app network test must be run as root. Skipping."
+      skip
     end
-  end
-  
-  def test_ubdd_use
-    Tempfile.open('ubdd.img') do |file|
-      ShellUtils.sh!(['fallocate', '-l', "8M", file.path])
-      Ext2Utils.mke2fs(file.path)
-      @app = make_new_app('extra_image_ubdd' => file.path)
-      
-      post_with_notify '/task.json', :file => tar_fixture('use_ubdd')
-      
+
+    @app = make_new_app('network' => {
+      'enabled' => true,
+      'dnsmasq' => true,
+      'squid' => true
+    })
+
+    with_network(tapdev_for_sandbox) do
+      ProcessUser.drop_root!
+
+      post_with_notify '/task.json', :file => tar_fixture('network_test'), :token => '123123'
+
+      assert_equal 'application/x-www-form-urlencoded', @notify_content_type
+
       assert_equal 'finished', @notify_params['status']
       assert_equal '0', @notify_params['exit_code']
-      assert @notify_params['test_output'].include?('hello.txt')
-      assert @notify_params['test_output'].include?('lost+found') # made by mke2fs
+      assert_equal 'yay, downloaded it', @notify_params['test_output'].strip
+    end
+  end
+
+  def test_network_and_maven_cache
+    if !ProcessUser.can_become_root?
+      warn "sandbox_app network and maven cache test must be run as root. Skipping."
+      skip
+    end
+
+    @tmpdir = Dir.mktmpdir("maven_cache_test") do |tmpdir|
+      @app = make_new_app(maven_cache_enable_options(tmpdir))
+
+      with_network([tapdev_for_sandbox, tapdev_for_maven_cache]) do
+        ProcessUser.drop_root!
+
+        post_with_notify '/task.json', :file => tar_fixture('maven_project'), :token => '123'
+
+        assert_equal 'finished', @notify_params['status']
+        assert_equal '0', @notify_params['exit_code']
+        assert @notify_params['test_output'].include?('"status":"PASSED"')
+
+        mvn_cache = @app.plugin_manager.plugin('maven_cache')
+        mvn_cache.wait_for_daemon
+
+        post_with_notify '/task.json', :file => tar_fixture('show_mvn_cache'), :token => '456'
+        assert_equal 'finished', @notify_params['status']
+        assert_equal '0', @notify_params['exit_code']
+        assert @notify_params['test_output'].include?("/ubdd/maven/repository/org/apache/commons/commons-io/1.3.2")
+      end
+    end
+  end
+
+  def test_maven_cache_image_locking
+    if !ProcessUser.can_become_root?
+      warn "sandbox_app maven cache locking test must be run as root. Skipping."
+      skip
+    end
+
+    @tmpdir = Dir.mktmpdir("maven_cache_test") do |tmpdir|
+      @app = make_new_app(maven_cache_enable_options(tmpdir))
+
+      with_network([tapdev_for_sandbox, tapdev_for_maven_cache]) do
+        ProcessUser.drop_root!
+
+        mvn_cache = @app.plugin_manager.plugin('maven_cache')
+        mvn_cache.start_caching_deps(tar_fixture_file('maven_project'))
+
+        MiscUtils.poll_until(:time_limit => 10) { File.exist?("#{tmpdir}/current.img") }
+        assert mvn_cache.daemon_running?
+        MiscUtils.poll_until(:time_limit => 10, :timeout_error => "Didn't see current.img locked") do
+          got_lock = false
+          File.open("#{tmpdir}/current.img", File::RDONLY) do |f|
+            got_lock = f.flock(File::LOCK_EX | File::LOCK_NB)
+            f.flock(File::LOCK_UN) if got_lock
+          end
+          got_lock
+        end
+
+        mvn_cache.kill_daemon_if_running
+        mvn_cache.wait_for_daemon
+      end
+    end
+  end
+
+  def test_maven_cache_populate_request
+    if !ProcessUser.can_become_root?
+      warn "sandbox_app maven cache populate request test must be run as root. Skipping."
+      skip
+    end
+
+    @tmpdir = Dir.mktmpdir("maven_cache_test") do |tmpdir|
+      @app = make_new_app(maven_cache_enable_options(tmpdir))
+
+      with_network([tapdev_for_sandbox, tapdev_for_maven_cache]) do
+        ProcessUser.drop_root!
+
+        mvn_cache = @app.plugin_manager.plugin('maven_cache')
+
+        post '/maven_cache/populate.json', :file => tar_fixture('maven_project')
+
+        MiscUtils.poll_until(:time_limit => 10, :timeout_error => "Maven cache daemon did not start") do
+          mvn_cache.daemon_running?
+        end
+        # That it runs is good enough for us. These tests take so long as it is :(
+
+        mvn_cache.kill_daemon_if_running
+        mvn_cache.wait_for_daemon
+      end
     end
   end
 
@@ -177,12 +252,17 @@ private
   end
 
   def tar_fixture(name)
+    file = tar_fixture_file(name)
+    Rack::Test::UploadedFile.new(file, "application/x-tar", true)
+  end
+
+  def tar_fixture_file(name)
     file = Tempfile.new(['tmc-sandbox-fixture', '.tar'])
     file.close
     @tempfiles << file
     `tar -C #{fixture_path + name} -cf #{file.path} .`
     raise 'failed to tar' unless $?.success?
-    Rack::Test::UploadedFile.new(file.path, "application/x-tar", true)
+    file.path
   end
   
   def json_response
@@ -199,6 +279,44 @@ private
     raise 'No data received from MockServer. Did the program send any?' if req_data == nil
     @notify_content_type = req_data['content_type']
     @notify_params = req_data['params']
+  end
+
+  def tapdev_for_sandbox
+    TapDevice.new("tap_tmc0", "192.168.#{@app.settings['network']['private_ip_range_start']}.1", Settings.tmc_user)
+  end
+
+  def tapdev_for_maven_cache
+    mvn_cache = @app.settings['plugins']['maven_cache']
+    TapDevice.new(mvn_cache['tap_device'], "#{mvn_cache['tap_ip']}", Settings.tmc_user)
+  end
+
+  def network_enable_options
+    {
+      'network' => {
+        'enabled' => true,
+        'dnsmasq' => true,
+        'squid' => true
+      }
+    }
+  end
+
+  def maven_cache_enable_options(work_dir)
+    opts = {
+      'network' => {
+        'enabled' => true,
+        'dnsmasq' => true,
+        'squid' => true
+      },
+      'plugins' => {
+        'maven_cache' => Settings.get['plugins']['maven_cache']
+      },
+      'timeout' => 300 # maven downloads usually take a while :(
+    }
+    cache_opts = opts['plugins']['maven_cache']
+    cache_opts['enabled'] = true
+    cache_opts['img_size'] = "48M"
+    cache_opts['alternate_work_dir'] = work_dir
+    opts
   end
 end
 

@@ -9,23 +9,14 @@ require 'lockfile'
 require 'logger'
 require 'active_support/inflector'
 
+require 'app_log'
 require 'paths'
 require 'settings'
 require 'misc_utils'
 require 'sandbox_instance'
 
 class SandboxApp
-  def self.debug_log # Dunno if Logger is safe to use in subprocesses, but don't care since it's a debug tool.
-    @debug_log ||= Logger.new('/dev/null')
-  end
-  
-  def self.debug_log=(new_logger)
-    @debug_log = new_logger
-  end
-  
   class Plugin
-    include Paths
-    
     def initialize(settings)
       @settings = settings
       @plugin_settings = settings['plugins'][plugin_name]
@@ -36,11 +27,33 @@ class SandboxApp
     end
     
     attr_reader :settings
-    
+
+    #
     # Run just before starting the UML subprocess.
     # options:
+    #   :instance => SandboxInstance object
     #   :tar_file => path to submission .tar file for this request.
+    #
     def before_exec(options)
+    end
+
+    #
+    # Should return a hash like 'ubdd[rc]' => '/path/to/image' of
+    # images to give to the VM. Read-only images will get a shared flock.
+    # options:
+    #   :instance => SandboxInstance object
+    #
+    def extra_images(options)
+      {}
+    end
+
+    # Whether this plugin is interested in serving the given Rack::Request
+    def can_serve_request?(req)
+      false
+    end
+
+    def serve_request(req, resp, respdata)
+      raise "Not implemeted"
     end
   end
   
@@ -53,7 +66,7 @@ class SandboxApp
         plugin_names = @settings['plugins'].keys.sort # arbitrary but predictable load order
         for plugin_name in plugin_names
           if @settings['plugins'][plugin_name]['enabled']
-            SandboxApp.debug_log.debug "Loading plugin #{plugin_name}"
+            AppLog.debug "Loading plugin: #{plugin_name}"
             require "#{Paths.plugin_path}/#{plugin_name}.rb"
             class_name = ActiveSupport::Inflector.camelize(plugin_name)
             @plugins << Object.const_get(class_name).new(@settings)
@@ -61,14 +74,36 @@ class SandboxApp
         end
       end
     end
+
+    def plugin(plugin_name)
+      class_name = ActiveSupport::Inflector.camelize(plugin_name)
+      if Object.const_defined?(class_name)
+        cls = Object.const_get(class_name)
+        @plugins.find {|plugin| plugin.is_a?(cls) }
+      else
+        nil
+      end
+    end
     
     def run_hook(hook, *args)
+      rets = []
       for plugin in @plugins
         begin
-          plugin.send(hook, *args)
+          rets << plugin.send(hook, *args)
         rescue
-          SandboxApp.debug_log.debug "Plugin hook #{plugin}.#{hook} raised exception: #{$!}"
+          AppLog.debug "Plugin hook #{plugin}.#{hook} raised exception: #{$!}"
         end
+      end
+      rets
+    end
+
+    def serve_request(req, resp, respdata)
+      plugin = @plugins.find {|pl| pl.can_serve_request?(req) }
+      if plugin
+        plugin.serve_request(req, resp, respdata)
+        true
+      else
+        false
       end
     end
   end
@@ -86,8 +121,8 @@ class SandboxApp
       })
       postdata['exit_code'] = exit_code if exit_code != nil
 
-      SandboxApp.debug_log.debug "Notifying #{@url}"
-      resp = Net::HTTP.post_form(URI(@url), postdata)
+      AppLog.debug "Notifying #{@url}"
+      Net::HTTP.post_form(URI(@url), postdata)
     end
   end
 
@@ -96,8 +131,12 @@ class SandboxApp
 
   def initialize(settings_overrides = {})
     @settings = Settings.get.deep_merge(settings_overrides)
-    SandboxApp.debug_log = Logger.new(@settings['debug_log_file']) unless @settings['debug_log_file'].to_s.empty?
+
+    AppLog.set(Logger.new(@settings['app_log_file'])) if @settings['app_log_file']
+    AppLog.info("Starting up")
+
     init_check
+
     @plugin_manager = PluginManager.new(@settings)
 
     @instances = []
@@ -106,7 +145,7 @@ class SandboxApp
     end
   end
   
-  attr_reader :settings
+  attr_reader :settings, :plugin_manager
 
   def call(env)
     raw_response = nil
@@ -141,6 +180,8 @@ private
         serve_post_task
       elsif @req.get? && @req.path == '/status.json'
         serve_status
+      elsif @plugin_manager.serve_request(@req, @resp, @respdata)
+        # ok
       else
         @respdata[:status] = 'not_found'
         @resp.status = 404
@@ -149,6 +190,7 @@ private
       @respdata[:status] = 'bad_request'
       @resp.status = 500
     rescue
+      AppLog.warn("Error processing request:\n#{AppLog.fmt_exception($!)}")
       @respdata[:status] = 'error'
       @resp.status = 500
     end
@@ -159,8 +201,8 @@ private
     if inst
       raise BadRequest.new('missing file parameter') if !@req['file'] || !@req['file'][:tempfile]
       notifier = if @req['notify'] then Notifier.new(@req['notify'], @req['token']) else nil end
-      inst.start(@req['file'][:tempfile]) do |status, exit_code, output|
-        notifier.send_notification(status, exit_code, output)
+      inst.start(@req['file'][:tempfile].path) do |status, exit_code, output|
+        notifier.send_notification(status, exit_code, output) if notifier
       end
       @respdata[:status] = 'ok'
     else
@@ -174,6 +216,7 @@ private
     total = @instances.size
     @respdata[:busy_instances] = busy
     @respdata[:total_instances] = total
+    @respdata[:loadavg] = File.read("/proc/loadavg").split(' ')[0..2] if File.exist?("/proc/loadavg")
   end
   
   def init_check
@@ -182,4 +225,3 @@ private
     raise 'initrd not made' unless File.exist? Paths.initrd_path
   end
 end
-

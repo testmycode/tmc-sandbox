@@ -20,6 +20,7 @@ module MiscUtils
   #     Waits for and ignores any of the given signals.
   #     I'm not exactly sure why but a waited signal may still be delivered
   #     for some reason and so ought to be trapped just in case.
+  #
   
   # Sets O_CLOEXEC on all except the given FDs
   def self.cloexec_all_except(fds)
@@ -39,6 +40,21 @@ module MiscUtils
       bt.shift
     end
     bt
+  end
+
+  def self.poll_until(options = {}, &block)
+    options = {
+      :interval => 0.1,
+      :time_limit => nil,
+      :timeout_error => "timeout"
+    }.merge(options)
+    start_time = Time.now
+    while !block.call
+      if options[:time_limit] && Time.now - start_time > options[:time_limit]
+        raise options[:timeout_error]
+      end
+      sleep options[:interval]
+    end
   end
   
 private

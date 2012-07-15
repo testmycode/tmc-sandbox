@@ -22,8 +22,11 @@ class TapDevice
   end
 
   def exist?
-    ifaces = `ifconfig -a`.split("\n").map {|line| if line =~ /^(\S+)/ then $1 else nil end }.reject(&:nil?)
-    ifaces.include?(@name)
+    ifconfig_output_to_iface_list(`ifconfig -a`).include?(@name)
+  end
+
+  def up?
+    ifconfig_output_to_iface_list(`ifconfig`).include?(@name)
   end
 
   def create
@@ -31,7 +34,7 @@ class TapDevice
   end
 
   def up
-    ShellUtils.sh! ['ifconfig', @name, @ip_addr, 'netmask', '255.255.255.0', broadcast_addr, 'up']
+    ShellUtils.sh! ['ifconfig', @name, @ip_addr, 'netmask', '255.255.255.0', 'broadcast', broadcast_addr, 'up']
   end
 
   def down
@@ -40,5 +43,10 @@ class TapDevice
 
   def destroy
     ShellUtils.sh! ['ip', 'tuntap', 'del', 'dev', @name, 'mode', 'tap']
+  end
+
+private
+  def ifconfig_output_to_iface_list(output)
+    output.split("\n").map {|line| if line =~ /^(\S+)/ then $1 else nil end }.reject(&:nil?)
   end
 end
