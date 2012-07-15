@@ -4,7 +4,6 @@
 
 require 'fileutils'
 require 'lockfile'
-require 'etc'
 require 'shellwords'
 
 require "#{File.dirname(File.realpath(__FILE__))}/init.rb"
@@ -28,7 +27,6 @@ class WebappProgram
     mkdir_p_for_tmc_user(Paths.work_dir)
 
     Lockfile((Paths.lock_dir + 'main.lock').to_s) do
-      run_preliminary_checks
       ignore_signals
 
       maybe_with_network do
@@ -45,20 +43,6 @@ private
     FileUtils.mkdir_p(dir)
     ShellUtils.sh! ['chown', tmc_user, dir]
     ShellUtils.sh! ['chgrp', tmc_group, dir]
-  end
-
-  def run_preliminary_checks
-    begin
-      Etc.getpwnam(tmc_user)
-    rescue
-      raise "User doesn't exist: #{tmc_user}"
-    end
-
-    begin
-      Etc.getgrnam(tmc_group)
-    rescue
-      raise "Group doesn't exist: #{tmc_group}"
-    end
   end
 
   def termination_signals
