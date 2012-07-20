@@ -13,6 +13,7 @@ require 'app_log'
 require 'paths'
 require 'settings'
 require 'misc_utils'
+require 'signal_handlers'
 require 'sandbox_instance'
 
 class SandboxApp
@@ -148,6 +149,8 @@ class SandboxApp
   attr_reader :settings, :plugin_manager
 
   def call(env)
+    ensure_signal_handlers_set_up
+
     raw_response = nil
     FileUtils.mkdir_p(Paths.lock_dir)
     Lockfile((Paths.lock_dir + 'sandbox_app.lock').to_s) do
@@ -223,5 +226,21 @@ private
     raise 'kernel not compiled' unless File.exist? Paths.kernel_path
     raise 'rootfs not prepared' unless File.exist? Paths.rootfs_path
     raise 'initrd not made' unless File.exist? Paths.initrd_path
+  end
+
+  def ensure_signal_handlers_set_up
+    if !@handlers_set_up
+      # Between initialize and the first call(), Rack sets up its SIGINT handler,
+      # which shuts down the server and/or exits the program.
+      # We want our registered signal handlers to be run before that.
+      SignalHandlers.reapply
+      orig_int_handler = SignalHandlers.original_handler('INT')
+      if orig_int_handler.is_a?(Proc)
+        AppLog.info("Importing Rack's SIGINT handler")
+        SignalHandlers.add_trap('INT', orig_int_handler, SignalHandlers::PRIORITY_LAST)
+      end
+
+      @handlers_set_up = true
+    end
   end
 end

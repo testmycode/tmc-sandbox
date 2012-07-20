@@ -96,7 +96,7 @@ private
   def shutdown_webapp
     AppLog.info "Stopping webapp"
     if @webapp_pid
-      # Webrick expects SIGINT. It ignores SIGTERM. Webrick is a little bit strange that way.
+      # Rack does an orderly shutdown on SIGINT.
       Process.kill("INT", @webapp_pid)
       Process.waitpid(@webapp_pid)
       @webapp_pid = nil
