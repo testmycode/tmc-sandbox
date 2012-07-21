@@ -86,6 +86,9 @@ fi
 
 if `cat /proc/cmdline | grep -E -q 'run:"([^"]*)"'`; then
   COMMAND=`cat /proc/cmdline | grep -E -o 'run:"([^"]*)"' | sed s/run:\"// | sed s/\"\$//`
+  echo "Trying to extract /dev/ubdb as tar to /tmc"
+  mkdir -p /tmc
+  (tar -C /tmc -xf /dev/ubdb) || true
   echo "Running $COMMAND"
   $COMMAND
 elif `cat /proc/cmdline | grep -E -q 'run_tarred_script:([^[:space:]]*)'`; then
