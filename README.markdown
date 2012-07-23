@@ -1,4 +1,3 @@
-
 The TMC sandbox consists of the following:
 
 - A [User-Mode Linux](http://user-mode-linux.sourceforge.net/) kernel.
@@ -10,7 +9,7 @@ The TMC sandbox consists of the following:
 
 Build with `sudo make` and test with `./run-test-exercise.sh` or `./run-bash.sh`.
 
-You may need to download `http://ftp-master.debian.org/archive-key-6.0.asc` and `apt-key add` if running Ubuntu or similar.
+You may need to download http://ftp-master.debian.org/archive-key-6.0.asc and `apt-key add` if running Ubuntu or similar.
 
 ## Options ##
 
