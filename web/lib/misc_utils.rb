@@ -29,6 +29,12 @@ module MiscUtils
       cloexec(fd)
     end
   end
+
+  def self.cloexec_all
+    for fd in open_fds
+      cloexec(fd)
+    end
+  end
   
   # Returns the current backtrace as an array. A debugging aid.
   def self.current_backtrace

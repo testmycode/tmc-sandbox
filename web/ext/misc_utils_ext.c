@@ -31,7 +31,7 @@ void Init_misc_utils_ext()
     rb_global_variable(&misc_utils_module);
 
     rb_define_module_function(misc_utils_module, "open_fds", &misc_utils_open_fds, 0);
-    rb_define_module_function(misc_utils_module, "cloexec", &misc_utils_open_fds, 1);
+    rb_define_module_function(misc_utils_module, "cloexec", &misc_utils_cloexec, 1);
 
     signal_hash = rb_funcall(signal_class, id_list, 0);
     rb_global_variable(&signal_hash);

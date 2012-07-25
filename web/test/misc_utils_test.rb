@@ -27,7 +27,26 @@ class MiscUtilsTest < MiniTest::Unit::TestCase
     end
   end
 
-  def test_pause
+  def test_cloexec_all
+    pin, pout = IO.pipe
+    pid = Process.fork do
+      MiscUtils.cloexec_all
+      Process.exec("sleep 10")
+    end
+    begin
+      pin.close
+
+      assert_raises(Errno::EPIPE) do
+        pout.write('a'*100000)
+      end
+      pout.close
+    ensure
+      Process.kill("KILL", pid)
+      Process.waitpid(pid)
+    end
+  end
+
+  def test_wait_for_signal
     pin, pout = IO.pipe
     pid = Process.fork do
       pin.close
