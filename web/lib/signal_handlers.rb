@@ -1,4 +1,22 @@
 
+require 'misc_utils'
+
+module Signal
+  class <<self
+    alias_method :_actual_trap, :trap
+  end
+  def self.trap(sig, command = nil, &block)
+    command = block if command == nil
+    SignalHandlers.set_original_handler(sig, command)
+  end
+end
+
+module Kernel
+  def trap(sig, command = nil, &block)
+    Signal.trap(sig, command, &block)
+  end
+end
+
 # Allows for multiple handlers for a single signal.
 # The methods here may not be called from a signal handler.
 module SignalHandlers
@@ -7,7 +25,10 @@ module SignalHandlers
   PRIORITY_LAST = 10
 
   @handlers = {} # signal => hash of priority => array of handlers
-  @original_traps = {}
+  @original_traps = {} # signal => command or proc set by Signal.trap or Kernel#trap.
+
+  # @original_traps[sig] is set only if @handlers[sig] is not empty
+
   @signal_name_by_num = Signal.list.invert
 
   def self.termination_signals
@@ -43,19 +64,34 @@ module SignalHandlers
       @original_traps[sig]
     else
       caught = false
-      handler = Signal.trap(sig) { caught = true }
-      Signal.trap(sig, handler)
-      Process.kill(sig, Process.pid) if caught # very unlikely
-      handler
+      original = set_actual_trap(sig) { caught = true }
+      set_actual_trap(sig, original)
+      Process.kill(sig, Process.pid) if caught # unlikely but possible
+      original
     end
   end
 
-  def self.reapply
-    for sig in @handlers.keys
-      if !@handlers[sig].empty?
-        setup_trap(sig)
+  def self.set_original_handler(signals, handler)
+    signals = normalize_signal_list(signals)
+    for sig in signals
+      @original_traps[sig] = handler
+      set_trap(sig)
+    end
+  end
+
+  def self.restore_original_handler(signals)
+    signals = normalize_signal_list(signals)
+    for sig in signals
+      if @original_traps[sig]
+        @handlers.delete(sig)
+        set_actual_trap(sig, @original_traps[sig])
       end
     end
+  end
+
+  def self.inspect
+    "<SignalHandlers @handlers=#{@handlers.inspect} " +
+      "@original_traps=#{@original_traps.inspect}>"
   end
 
 
@@ -66,7 +102,7 @@ private
   end
 
   def self.normalize_signal_name(sig)
-    s = sig
+    s = sig.to_s
     if s =~ /^\d+$/
       s = @signal_name_by_num[sig.to_i]
     elsif sig =~ /^SIG[A-Z0-9]+$/
@@ -77,40 +113,38 @@ private
   end
 
   def self.add_one_trap(sig, handler_proc, priority)
-    if @handlers[sig] == nil || @handlers[sig].empty?
-      @handlers[sig] = {priority => [handler_proc]}
-      setup_trap(sig)
-    else
-      @handlers[sig][priority] ||= []
-      @handlers[sig][priority] << handler_proc
-    end
+    @handlers[sig] ||= {}
+    @handlers[sig][priority] ||= []
+    @handlers[sig][priority] << handler_proc
+    set_trap(sig)
   end
 
   def self.remove_one_trap(sig, trap_proc)
     @handlers[sig].each_value {|a| a.delete(trap_proc) }
     @handlers[sig].reject! {|_, a| a.empty? }
+    @handlers.reject! {|_, a| a.empty? }
+    set_trap(sig)
+  end
 
-    if @handlers[sig].empty?
-      @handlers.delete(sig)
-      if @original_traps[sig].is_a?(Proc)
-        block = @original_traps[sig]
-        Signal.trap(sig, &block)
-      else
-        Signal.trap(sig, @original_traps[sig])
+  # Called each time @handlers or @original_traps change.
+  def self.set_trap(sig)
+    handlers = if @handlers[sig] then @handlers[sig].clone else {} end
+    if handlers.empty?
+      if @original_traps[sig]
+        set_actual_trap(sig, @original_traps[sig])
         @original_traps.delete(sig)
       end
+    else
+      trap_proc = trap_proc_for(sig, handlers)
+      old_trap = set_actual_trap(sig, &trap_proc)
+      @original_traps[sig] = old_trap unless @original_traps.has_key?(sig)
     end
   end
 
-  def self.setup_trap(sig)
-    trap_proc = trap_proc_for(sig)
-    @original_traps[sig] = Signal.trap(sig, &trap_proc)
-  end
-
-  def self.trap_proc_for(sig)
+  def self.trap_proc_for(sig, handlers_by_priority)
     Proc.new do
-      for priority in @handlers[sig].keys.sort
-        for handler in @handlers[sig][priority]
+      for priority in handlers_by_priority.keys.sort
+        for handler in handlers_by_priority[priority]
           if handler.arity == 0
             handler.call
           else
@@ -118,6 +152,15 @@ private
           end
         end
       end
+    end
+  end
+
+  def self.set_actual_trap(sig, command = nil, &block)
+    block = command if command.is_a?(Proc)
+    if block_given?
+      Signal._actual_trap(sig, &block)
+    else
+      Signal._actual_trap(sig, command)
     end
   end
 end

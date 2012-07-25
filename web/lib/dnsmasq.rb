@@ -2,6 +2,7 @@
 require 'paths'
 require 'settings'
 require 'app_log'
+require 'misc_utils'
 
 module Dnsmasq
   def self.with_dnsmasq(tapdevs, &block)
@@ -15,10 +16,8 @@ module Dnsmasq
 
   def self.start(tapdevs)
     AppLog.info "Starting dnsmasq"
-    pid_file = Paths.work_dir + 'dnsmasq.pid'
     cmd = [
       Paths.dnsmasq_path.to_s,
-      "--keep-in-foreground",
       "--conf-file=-", #don't use global conf file
       "--user=#{Settings.tmc_user}",
       "--group=#{Settings.tmc_group}",
@@ -31,11 +30,17 @@ module Dnsmasq
     cmd += tapdevs.map {|dev| "--interface=#{dev.name}" }
     cmd += tapdevs.map {|dev| "--no-dhcp-interface=#{dev.name}" }
 
-    pid = Process.fork do
+    File.delete(pid_file) if File.exist?(pid_file)
+
+    start_pid = Process.fork do
       $stdin.reopen("/dev/null")
       MiscUtils.cloexec_all_except([$stdin, $stdout, $stderr])
       Process.exec(*cmd)
     end
+    Process.waitpid(start_pid)
+
+    MiscUtils.poll_until(:time_limit => 15) { File.exist?(pid_file) }
+    pid = File.read(pid_file).strip.to_i
     AppLog.info "Dnsmasq started as #{pid}"
     pid
   end
@@ -43,6 +48,10 @@ module Dnsmasq
   def self.stop(pid)
     AppLog.info "Shutting down dnsmasq"
     Process.kill("SIGTERM", pid)
-    Process.waitpid(pid)
+    MiscUtils.wait_until_daemon_stops(pid_file)
+  end
+
+  def self.pid_file
+    Paths.lock_dir + 'dnsmasq.pid'
   end
 end

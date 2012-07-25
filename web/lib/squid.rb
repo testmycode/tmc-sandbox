@@ -3,6 +3,7 @@ require 'paths'
 require 'app_log'
 require 'settings'
 require 'shell_utils'
+require 'misc_utils'
 
 module Squid
   def self.with_squid(tapdevs, &block)
@@ -20,15 +21,21 @@ module Squid
     ensure_swap_dirs_created
     write_config_file(tapdevs)
 
-    cmd = [Paths.squid_path.to_s, "-d", "error", "-N"]
+    cmd = [Paths.squid_path.to_s, "-d", "error"]
 
-    pid = Process.fork do
+    File.delete(pid_file) if File.exist?(pid_file)
+
+    start_pid = Process.fork do
       $stdin.reopen("/dev/null")
       $stdout.reopen(Paths.squid_startup_log_path, 'a')
       $stderr.reopen($stdout)
       MiscUtils.cloexec_all_except([$stdin, $stdout, $stderr])
       Process.exec(*cmd)
     end
+    Process.waitpid(start_pid)
+
+    MiscUtils.poll_until(:time_limit => 15) { File.exist?(pid_file) }
+    pid = File.read(pid_file).strip.to_i
     AppLog.info "Squid started as #{pid}"
     pid
   end
@@ -36,7 +43,11 @@ module Squid
   def self.stop(pid)
     AppLog.info "Shutting down squid"
     Process.kill("SIGTERM", pid)
-    Process.waitpid(pid)
+    MiscUtils.wait_until_daemon_stops(pid_file)
+  end
+
+  def self.pid_file
+    Paths.squidroot_dir + 'var' + 'run' + 'squid.pid'
   end
 
 private
@@ -98,7 +109,7 @@ refresh_pattern .		0	20%	4320
 cache_effective_user #{Settings.tmc_user}
 cache_effective_group #{Settings.tmc_group}
 
-shutdown_lifetime 2 seconds
+shutdown_lifetime 1 seconds
 EOS
     File.open(Paths.squid_config_path, 'wb') {|f| f.write(config)}
   end

@@ -9,7 +9,7 @@ RW_IMAGE=/dev/ubde
 if [ -z "$LOGGING" ]; then
   export LOGGING=1
   $0 $@ > /tmc/log.txt 2>&1
-  tar -C /tmc -cf $LOG_FILE log.txt
+  tar -C /tmc -cf $LOG_FILE log.txt || true
   exit 0
 fi
 
@@ -20,6 +20,7 @@ mkdir -p /mnt/rw
 
 case "$COMMAND" in
   getdeps)
+    fsck -y $RW_IMAGE
     mount -o rw $RW_IMAGE /mnt/rw
     chown tmc /mnt/rw # in case it's the first mount
     
@@ -44,6 +45,12 @@ case "$COMMAND" in
     fi
     umount /mnt/ro
     umount /mnt/rw
+    ;;
+  filelist)
+    mount -o ro $RO_IMAGE /mnt/ro
+    cd /mnt/ro
+    find . > /output.txt
+    tar -C / -cf $RW_IMAGE output.txt
     ;;
 esac
 

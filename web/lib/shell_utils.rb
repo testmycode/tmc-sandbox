@@ -8,6 +8,7 @@ module ShellUtils
   def sh_preescaped!(cmd)
     output = `#{cmd} 2>&1`
     raise "Failed: #{cmd}. Exit code: #{$?.exitstatus}. Output:\n#{output}" if !$?.success?
+    output
   end
   
   def system!(cmd)

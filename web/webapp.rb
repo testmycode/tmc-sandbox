@@ -3,7 +3,6 @@
 # See site.defaults.yml for configuration.
 
 require 'fileutils'
-require 'lockfile'
 require 'shellwords'
 
 require "#{File.dirname(File.realpath(__FILE__))}/init.rb"
@@ -14,6 +13,7 @@ require 'dnsmasq'
 require 'squid'
 require 'process_user'
 require 'signal_handlers'
+require 'lock_file'
 
 class WebappProgram
   def initialize
@@ -26,7 +26,7 @@ class WebappProgram
     mkdir_p_for_tmc_user(Paths.lock_dir)
     mkdir_p_for_tmc_user(Paths.work_dir)
 
-    Lockfile((Paths.lock_dir + 'main.lock').to_s) do
+    LockFile.open(Paths.lock_dir + 'main.lock') do
       ignore_signals
 
       maybe_with_network do
@@ -74,10 +74,11 @@ private
 
   def init_webapp
     AppLog.info "Starting webapp"
-    @webapp_pid = Process.fork do
+
+    File.delete(webapp_pid_file) if File.exist?(webapp_pid_file)
+
+    start_pid = Process.fork do
       $stdin.reopen("/dev/null")
-      $stdout.reopen("#{Paths.work_dir}/webrick.log")
-      $stderr.reopen($stdout)
       MiscUtils.cloexec_all_except([$stdin, $stdout, $stderr])
       ProcessUser.drop_root_permanently!
       cmd = [
@@ -87,10 +88,24 @@ private
         '--server',
         'webrick',
         '--port',
-        @settings['http_port']
+        @settings['http_port'],
+        '--pid',
+        webapp_pid_file
       ]
+
+      # We don't use --daemonize since it closes stdout and stderr.
+      # Instead we'll daemonize manually.
+      exit! if Process.fork
+      Process.setsid
+      exit! if Process.fork
+
       Process.exec(Shellwords.join(cmd.map(&:to_s)))
     end
+    Process.waitpid(start_pid)
+
+    MiscUtils.poll_until(:time_limit => 15) { File.exist?(webapp_pid_file) }
+    @webapp_pid = File.read(webapp_pid_file).strip.to_i
+    AppLog.info "Dnsmasq started as #{@webapp_pid}"
   end
 
   def shutdown_webapp
@@ -98,7 +113,7 @@ private
     if @webapp_pid
       # Rack does an orderly shutdown on SIGINT.
       Process.kill("INT", @webapp_pid)
-      Process.waitpid(@webapp_pid)
+      MiscUtils.wait_until_daemon_stops(webapp_pid_file)
       @webapp_pid = nil
     end
   end
@@ -193,6 +208,10 @@ private
 
   def maven_cache_enabled?
     @settings['plugins']['maven_cache']['enabled']
+  end
+
+  def webapp_pid_file
+    Paths.lock_dir + 'rack.pid'
   end
 end
 

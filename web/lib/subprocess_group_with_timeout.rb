@@ -31,6 +31,8 @@ class SubprocessGroupWithTimeout
     pipe_in, pipe_out = IO.pipe
     
     @intermediate_pid = Process.fork do
+      SignalHandlers.restore_original_handler(SignalHandlers.termination_signals)
+
       pipe_in.close
       # We start a new session and process group for two reasons.
       # First, we want to be able to kill the whole process group at once.
@@ -49,12 +51,12 @@ class SubprocessGroupWithTimeout
         @block.call
       end
       timeout_pid = Process.fork do
-        [$stdin, $stdout, $stderr].each &:close
         pipe_out.close
-        sleep @timeout
+        MiscUtils.cloexec_all
+        Process.exec("sleep #{@timeout}")
       end
       @log.debug "PIDS: Intermediate(#{Process.pid}), Worker(#{worker_pid}), Timeout(#{timeout_pid})"
-      
+
       Signal.trap("SIGTERM") do
         Process.kill("KILL", timeout_pid)
         Process.kill("KILL", -worker_pid)
@@ -76,7 +78,7 @@ class SubprocessGroupWithTimeout
         Process.kill("KILL", -worker_pid) # kill whole process group
         status = :timeout
       end
-      
+
       @after_block.call(status)
     end
 

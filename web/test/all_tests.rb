@@ -9,6 +9,6 @@ lambda do
 
   for test in tests
     puts "Running #{test}"
-    system("ruby #{testdir}/#{test}")
+    system("ruby #{testdir}/#{test} -v")
   end
 end.call

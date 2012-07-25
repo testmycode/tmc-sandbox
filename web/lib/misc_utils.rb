@@ -20,6 +20,7 @@ module MiscUtils
   #     Waits for and ignores any of the given signals.
   #     I'm not exactly sure why but a waited signal may still be delivered
   #     for some reason and so ought to be trapped just in case.
+  #     Returns the name of the signal caught as a string without the 'SIG' prefix.
   #
   
   # Sets O_CLOEXEC on all except the given FDs
@@ -60,6 +61,26 @@ module MiscUtils
         raise options[:timeout_error]
       end
       sleep options[:interval]
+    end
+  end
+
+  def self.wait_until_daemon_stops(pid_file)
+    poll_until do
+      begin
+        pid = File.read(pid_file).strip.to_i
+        !process_exists?(pid)
+      rescue
+        !File.exist?(pid_file)
+      end
+    end
+  end
+
+  def self.process_exists?(pid)
+    begin
+      Process.getpgid(pid)
+      true
+    rescue Errno::ESRCH
+      false
     end
   end
   

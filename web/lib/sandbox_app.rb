@@ -5,7 +5,6 @@ require 'multi_json'
 require 'pathname'
 require 'net/http'
 require 'uri'
-require 'lockfile'
 require 'logger'
 require 'active_support/inflector'
 
@@ -15,6 +14,7 @@ require 'settings'
 require 'misc_utils'
 require 'signal_handlers'
 require 'sandbox_instance'
+require 'lock_file'
 
 class SandboxApp
   class Plugin
@@ -48,6 +48,10 @@ class SandboxApp
       {}
     end
 
+    # May be called from a signal handler before the server shuts down.
+    def shut_down
+    end
+
     # Whether this plugin is interested in serving the given Rack::Request
     def can_serve_request?(req)
       false
@@ -74,6 +78,11 @@ class SandboxApp
           end
         end
       end
+
+      signal_handler = lambda do
+        @plugins.each(&:shut_down)
+      end
+      SignalHandlers.add_trap(SignalHandlers.termination_signals, signal_handler)
     end
 
     def plugin(plugin_name)
@@ -138,6 +147,8 @@ class SandboxApp
 
     init_check
 
+    set_up_signal_handlers
+
     @plugin_manager = PluginManager.new(@settings)
 
     @instances = []
@@ -149,20 +160,29 @@ class SandboxApp
   attr_reader :settings, :plugin_manager
 
   def call(env)
-    ensure_signal_handlers_set_up
-
     raw_response = nil
     FileUtils.mkdir_p(Paths.lock_dir)
-    Lockfile((Paths.lock_dir + 'sandbox_app.lock').to_s) do
+    LockFile.open(Paths.lock_dir + 'sandbox_app.lock') do
       @req = Rack::Request.new(env)
       @resp = Rack::Response.new
-      @resp['Content-Type'] = 'application/json; charset=utf-8'
-      @respdata = {}
+      if @req.path.end_with?('.html')
+        @resp['Content-Type'] = 'text/html; charset=utf-8'
+        @respdata = ''
+        @request_type = :html
+      else
+        @resp['Content-Type'] = 'application/json; charset=utf-8'
+        @respdata = {}
+        @request_type = :json
+      end
 
       serve_request
 
       raw_response = @resp.finish do
-        @resp.write(MultiJson.encode(@respdata))
+        if @req.path.end_with?('.json')
+          @resp.write(MultiJson.encode(@respdata))
+        else
+          @resp.write(@respdata)
+        end
       end
     end
     raw_response
@@ -186,16 +206,31 @@ private
       elsif @plugin_manager.serve_request(@req, @resp, @respdata)
         # ok
       else
-        @respdata[:status] = 'not_found'
         @resp.status = 404
+        case @request_type
+        when :json
+          @respdata[:status] = 'not_found'
+        when :html
+          @respdata << "<html><body>Not found</body></html>"
+        end
       end
     rescue BadRequest
-      @respdata[:status] = 'bad_request'
       @resp.status = 500
+      case @request_type
+      when :json
+        @respdata[:status] = 'bad_request'
+      when :html
+        @respdata << "<html><body>Bad request</body></html>"
+      end
     rescue
       AppLog.warn("Error processing request:\n#{AppLog.fmt_exception($!)}")
-      @respdata[:status] = 'error'
       @resp.status = 500
+      case @request_type
+      when :json
+        @respdata[:status] = 'error'
+      when :html
+        @respdata << "<html><body>Error</body></html>"
+      end
     end
   end
   
@@ -228,19 +263,15 @@ private
     raise 'initrd not made' unless File.exist? Paths.initrd_path
   end
 
-  def ensure_signal_handlers_set_up
-    if !@handlers_set_up
-      # Between initialize and the first call(), Rack sets up its SIGINT handler,
-      # which shuts down the server and/or exits the program.
-      # We want our registered signal handlers to be run before that.
-      SignalHandlers.reapply
-      orig_int_handler = SignalHandlers.original_handler('INT')
-      if orig_int_handler.is_a?(Proc)
-        AppLog.info("Importing Rack's SIGINT handler")
-        SignalHandlers.add_trap('INT', orig_int_handler, SignalHandlers::PRIORITY_LAST)
-      end
-
-      @handlers_set_up = true
+  def set_up_signal_handlers
+    # Between initialize and the first call(), Rack sets up its SIGINT handler,
+    # which shuts down the server and/or exits the program.
+    # We want our registered signal handlers to be run before that,
+    # and then we want to run the original handler to shut things down.
+    handler = lambda do
+      SignalHandlers.restore_original_handler('INT')
+      Process.kill('INT', Process.pid)
     end
+    SignalHandlers.add_trap('INT', handler, SignalHandlers::PRIORITY_LAST)
   end
 end

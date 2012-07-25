@@ -19,6 +19,7 @@ static ID id_lookup;
 static VALUE misc_utils_wait_for_signal(int argc, VALUE *argv, VALUE mod);
 
 static void args_to_sigset(int argc, VALUE *argv, sigset_t *sigset);
+static int arg_to_sig(VALUE arg);
 static int signal_from_name(const char *name);
 
 
@@ -58,7 +59,7 @@ static VALUE misc_utils_open_fds(VALUE mod)
 static VALUE misc_utils_cloexec(VALUE mod, VALUE fd)
 {
     Check_Type(fd, T_FIXNUM);
-    
+
     if (fcntl(NUM2INT(fd), F_SETFD, FD_CLOEXEC) == -1) {
         rb_sys_fail("Failed to set FD_CLOEXEC");
     }
@@ -111,18 +112,23 @@ static void args_to_sigset(int argc, VALUE *argv, sigset_t *sigset)
     sigemptyset(sigset);
 
     for (i = 0; i < argc; ++i) {
-        switch (TYPE(argv[i])) {
-        case T_FIXNUM:
-            sig = FIX2INT(argv[i]);
-            break;
-        case T_STRING:
-            sig = signal_from_name(StringValueCStr(argv[i]));
-            break;
-        default:
-            rb_raise(rb_eTypeError, "Signals must be given as names or numbers");
-        }
-
+        sig = arg_to_sig(argv[i]);
         sigaddset(sigset, sig);
+    }
+}
+
+static int arg_to_sig(VALUE arg)
+{
+    switch (TYPE(arg)) {
+    case T_FIXNUM:
+        return FIX2INT(arg);
+    case T_SYMBOL:
+        arg = rb_sym_to_s(arg);
+        /* fall through */
+    case T_STRING:
+        return signal_from_name(StringValueCStr(arg));
+    default:
+        rb_raise(rb_eTypeError, "Signals must be given as names or numbers");
     }
 }
 
