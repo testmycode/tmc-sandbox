@@ -9,5 +9,8 @@ fi
 mkdir /tmp/exercise
 cd /tmp/exercise
 tar xf "$EXERCISE_TAR"
+
 mvn -e dependency:go-offline
 
+# Ensure we have the latest TMC maven plugin too.
+mvn -Dartifact="fi.helsinki.cs.tmc:tmc-maven-plugin:RELEASE" org.apache.maven.plugins:maven-dependency-plugin:2.4:get
