@@ -8,13 +8,23 @@ The TMC sandbox consists of the following:
 
 ## Compiling and running ##
 
-Build with `sudo make` and test with `./run-test-exercise.sh` or `./run-bash.sh`.
+Install the following prerequisites:
 
-You may need to download `http://ftp-master.debian.org/archive-key-6.0.asc` and `apt-key add` if running Ubuntu or similar.
+- `build-essential`
+- `squashfs-tools`
+- `multistrap`
+
+If you're on a Debian derivative, you may need to install Debian's archive key:
+
+    curl -L http://ftp-master.debian.org/archive-key-6.0.asc | sudo apt-key add -
+
+Now build with `sudo make`. Root access is needed by multistrap since it chroots.
+
+You can test the sandbox with `./run-test-exercise.sh` or `./run-bash.sh` under `uml/`.
 
 ## Options ##
 
-The sandbox is invoked by starting `linux.uml` with at least the following kernel parameters:
+The sandbox is invoked by starting `uml/linux.uml` with at least the following kernel parameters:
 
 - `initrd=initrd.img` - the initrd.
 - `ubdarc=rootfs.squashfs` - the rootfs (the `rc` meaning read-only shared).
@@ -26,9 +36,11 @@ The normal boot process is skipped. The initrd invokes a custom init script that
 
 ## Webservice ##
 
-There's a simple Rack webservice under `web/`. It implements the following protocol.
+There's a simple Rack webservice under `web/`.
 
-`POST /`
+The service implements the following protocol.
+
+`POST /tasks.json`
 Expects multipart formdata with these parameters:
 
 - **file**: task file as plain tar file
@@ -44,18 +56,19 @@ to the notify URL with the following JSON object:
     - 'failed' in any other case
 - **exit_code**: the exit code of `tmc-run`, or null if not applicable
 - **token**: the token given in the request
-- **output**: the output.txt of the task. Empty in some failure cases.
+- **test_output**: the test_output.txt created by the task. May be empty.
+- **stdout**: the stdout.txt created by the task. May be empty.
+- **stderr**: the stderr.txt created by the task. May be empty.
 
-Only one task may run per instance of this webservice.
+Only a limited number of tasks may run per instance of this webservice.
 If it is busy, it responds with a HTTP 500 and a JSON object `{status: 'busy'}`.
-Multiple instances should be deployed to separate directories under separate URLs.
-They may, however, share the same kernel, initrd and rootfs files.
 
-### Usage ###
+### Setup ###
 
 First, read through the configuration file in `site.defaults.yml`.
 
-Compile the small C extension with `rake ext`.
+Install dependencies with `bundle install` and
+compile the small C extension with `rake ext`.
 
 Run tests by doing `sudo rake test` under `web/`. It requires `e2fsprogs` and `e2tools` to be installed.
 
@@ -85,8 +98,8 @@ that inspects incoming exercises and starts a background process to
 download their dependencies to a cache. This way, a project needs to download
 its dependencies in the actual sandbox only on the first run (or the first
 few runs if unlucky), when the cache is not yet populated.
-The cache may also be populated by an HTTP request.
+The cache may also be populated by a pom.xml file upload to `/maven_cache/populate.json`.
 
 The technical details are documented in `web/plugins/maven_cache.rb`.
 
-To use the cache, simply enable it in `site.yml`.
+The cache must be explicitly enabmed in `site.yml`.
