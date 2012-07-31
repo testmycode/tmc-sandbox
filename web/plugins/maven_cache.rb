@@ -524,7 +524,6 @@ private
 
           imgpair.lock_front_ro
           begin
-            Ext2Utils.fsck(imgpair.frontimg.path)
             AppLog.debug "Ryncing from  #{imgpair.frontimg.path} to #{imgpair.backimg.path}"
             rsync(imgpair.frontimg.path, imgpair.backimg.path)
           ensure
