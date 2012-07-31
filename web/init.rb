@@ -6,6 +6,7 @@ require 'paths'
 require 'settings'
 require 'fileutils'
 FileUtils.mkdir_p(Paths.lock_dir)
+FileUtils.chown(Settings.tmc_user, Settings.tmc_group, Paths.lock_dir)
 FileUtils.mkdir_p(Paths.work_dir)
 FileUtils.chown(Settings.tmc_user, Settings.tmc_group, Paths.work_dir)
 FileUtils.touch(Paths.work_dir + 'test.log')
