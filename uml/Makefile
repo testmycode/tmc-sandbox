@@ -54,7 +54,7 @@ $(OUT)/rootfs.squashfs: chroot
 	mksquashfs $(CHROOT) $@ -all-root -noappend -e var/cache/apt $(SQUASHFS_EXTRA_OPTS)
 	chmod a+r $@
 
-chroot: $(CHROOT)/var/log/dpkg.log $(CHROOT)/sbin/tmc-init maven
+chroot: $(CHROOT)/var/log/dpkg.log $(CHROOT)/sbin/tmc-init $(CHROOT)/sbin/fast-shutdown maven
 
 $(OUT)/multistrap.conf: rootfs/multistrap.conf.in
 	sed 's/__ARCH__/$(ARCH)/' < $< > $@
@@ -69,6 +69,9 @@ $(CHROOT)/var/log/dpkg.log: $(OUT)/multistrap.conf
 $(CHROOT)/sbin/tmc-init: $(CHROOT)/var/log/dpkg.log rootfs/tmc-init
 	cp rootfs/tmc-init $(CHROOT)/sbin/tmc-init
 	chmod +x $(CHROOT)/sbin/tmc-init
+
+$(CHROOT)/sbin/fast-shutdown: rootfs/fast-shutdown.c
+	gcc -Os -o $@ $<
 
 # Maven
 maven: $(CHROOT)/usr/local/bin/mvn $(CHROOT)/opt/maven $(CHROOT)/etc/maven-settings.template.xml
