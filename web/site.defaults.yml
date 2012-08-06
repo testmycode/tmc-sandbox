@@ -1,19 +1,41 @@
 # NOTE: Don't edit this file. Create a `site.yml` and override the settings there instead.
 
 #
-# The relative or absolute path to the directory that contains linux.uml, initrd.img and rootfs.squashfs.
-# Multiple instances of the server may share the compiled files, since they're accessed read-only.
-# It's recommended to share the files when deploying to a single server, since otherwise
-# cache space is wasted.
+# User and group to run non-privileged processes as.
+# These should own the web/ directory.
 #
-sandbox_files_root: ../output
+tmc_user: tmc
+tmc_group: tmc
+
+#
+# Maximum number of sandboxes to run simultaneously
+#
+max_instances: 4
+
+#
+# Webapp port
+#
+http_port: 3001
+
+#
+# Networking creates a TAP device for each instance and runs a private copy of
+# dnsmasq and squid (HTTP proxy) on them. The TAP devices are named
+# tap_tmc0, tap_tmc1, etc. for each instance. They get private IP ranges
+# 192.168.100.*, 192.168.101.* etc (configurable_below).
+#
+network:
+  enabled: true
+  private_ip_range_start: 100
+  dnsmasq: true
+  squid: true
+
 
 #
 # The amount of RAM for each user-mode linux instance.
 # About 20M of this is used by the virtualized environment.
 # Program output must also fit here.
 #
-instance_ram: 128M
+instance_ram: 256M
 
 #
 # The maximum output.txt size accepted.
@@ -23,17 +45,24 @@ max_output_size: 20M
 #
 # Seconds before the virtualized instance is forcibly killed (with SIGKILL).
 #
-timeout: 120
+timeout: 180
 
 #
-# Extra parameters to user-mode-linux.
-# Can be used e.g. to configure virtual networks.
-# If you want to give many parameters then make them as a YAML array.
+# Log file.
 #
-extra_uml_args:
+app_log_file: work/app.log
 
 #
-# A log file with debug information.
+# Plugins and their configurations.
+# Relative paths are relative to this directory (`web/`).
+# Read the files under `plugins/` for documentation of each plugin.
 #
-debug_log_file:
+plugins:
+  maven_cache:
+    enabled: false
+    img_size: 1G  # When creating images if they don't exist
+    tap_device: tap_mvncache
+    tap_ip: 192.168.210.1
+    # How long to permit one download task to last, in seconds.
+    download_timeout: 300 # 5 minutes
 

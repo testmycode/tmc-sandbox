@@ -1,14 +1,27 @@
 
-# Build output
-/output
+# UML build output
+/uml/output
 
-# Temporaries
-/tmp
-/test/bash-runner
+# UML Temporaries
+/uml/tmp
+/uml/test/bash-runner
+
+# Misc build output
+/misc/dnsmasq
+/misc/squidroot
+
+# Misc temporaries
+/misc/work
 
 # Webservice
 /web/site.yml
 /web/work
+/web/lock
 /web/*.log
 /web/*.pid
+/web/cache
+/web/ext/*.o
+/web/ext/*.so
+/web/ext/Makefile
+/web/.idea
 

@@ -1,0 +1,57 @@
+#!/bin/sh -e
+
+EXERCISE_FILE=/dev/ubdb
+LOG_FILE=/dev/ubdc
+RO_IMAGE=/dev/ubdd
+RW_IMAGE=/dev/ubde
+
+# Run self so that output is logged
+if [ -z "$LOGGING" ]; then
+  export LOGGING=1
+  $0 $@ > /tmc/log.txt 2>&1
+  tar -C /tmc -cf $LOG_FILE log.txt || true
+  exit 0
+fi
+
+COMMAND=__COMMAND__
+
+mkdir -p /mnt/ro
+mkdir -p /mnt/rw
+
+case "$COMMAND" in
+  getdeps)
+    fsck -y $RW_IMAGE
+    mount -o rw $RW_IMAGE /mnt/rw
+    chown tmc /mnt/rw # in case it's the first mount
+    
+    export EXERCISE_TAR="$RO_IMAGE"
+    chmod +x /tmc/getdeps.sh
+
+    set +e
+    su tmc -c /tmc/getdeps.sh
+    EXIT_CODE=$?
+    set -e
+
+    umount /mnt/rw
+    exit $EXIT_CODE
+    ;;
+  rsync)
+    fsck -y $RW_IMAGE
+    mount -o ro $RO_IMAGE /mnt/ro
+    mount -o rw $RW_IMAGE /mnt/rw
+    
+    if [ -d /mnt/ro/maven/repository ]; then
+      mkdir -p /mnt/rw/maven/repository
+      rsync -a --delete /mnt/ro/maven/repository/ /mnt/rw/maven/repository || true
+    fi
+    umount /mnt/ro
+    umount /mnt/rw
+    ;;
+  filelist)
+    mount -o ro $RO_IMAGE /mnt/ro
+    cd /mnt/ro
+    find . > /output.txt
+    tar -C / -cf $RW_IMAGE output.txt
+    ;;
+esac
+

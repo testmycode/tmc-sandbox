@@ -1,0 +1,3 @@
+#!/bin/sh -e
+wget http://www.google.com/ > stdout.txt 2> stderr.txt
+echo "yay, downloaded it" > test_output.txt
