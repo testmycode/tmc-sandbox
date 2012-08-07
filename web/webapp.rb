@@ -14,13 +14,14 @@ require 'squid'
 require 'process_user'
 require 'signal_handlers'
 require 'lock_file'
+require 'daemons'
 
 class WebappProgram
   def initialize
     @settings = Settings.get
   end
 
-  def run(args)
+  def run
     raise "This should be run as root." if Process.uid != 0
 
     mkdir_p_for_tmc_user(Paths.lock_dir)
@@ -215,5 +216,14 @@ private
   end
 end
 
-
-WebappProgram.new.run(ARGV)
+daemon_options = {
+  :dir_mode => :normal,
+  :dir => Paths.lock_dir,
+  :log_dir => Paths.log_dir,
+  :log_output => true,
+  :stop_proc => lambda { Process.kill("INT", Process.pid) }
+}
+Daemons.run_proc('tmc_sandbox', daemon_options) do
+  Dir.chdir(Paths.web_dir)
+  WebappProgram.new.run
+end
