@@ -501,9 +501,10 @@ private
     imgpair = CloseableWrapper.new(ImagePair.new(img1, img2, @symlink))
 
     imgpair.lock_back_rw
-    
+
+    exiting = false
     begin
-      loop do
+      while !exiting do
       
         # Acquire tasksdir lock to atomically check if there are tasks
         # and move one to be processed if so.
@@ -537,7 +538,6 @@ private
               # Exit while holding tasksdir lock.
               # Prevents the race where a sandbox adds a task but sees the exiting daemon as active.
               AppLog.debug "Maven cache daemon exiting."
-              exit!(0)
             else
               # More tasks appeared while rsyncing. Continue.
               exiting = false
