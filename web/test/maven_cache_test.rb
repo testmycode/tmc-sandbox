@@ -12,7 +12,7 @@ class MavenCacheTest < MiniTest::Unit::TestCase
   def setup
     ProcessUser.drop_root!
 
-    AppLog.set(Logger.new(Paths.work_dir + 'test.log'))
+    AppLog.set(Logger.new(Paths.log_dir + 'test.log'))
 
     @tmpdir = Dir.mktmpdir("maven_cache_test")
 

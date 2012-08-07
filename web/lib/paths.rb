@@ -15,6 +15,10 @@ module Paths
     web_dir + 'work'
   end
 
+  def log_dir
+    web_dir + 'log'
+  end
+
   def lock_dir
     web_dir + 'lock'
   end
@@ -56,6 +60,6 @@ module Paths
   end
 
   def squid_startup_log_path
-    work_dir + 'squid-startup.log'
+    log_dir + 'squid-startup.log'
   end
 end

@@ -38,9 +38,9 @@ class SandboxAppTest < MiniTest::Unit::TestCase
   def setup
     ProcessUser.drop_root!
 
-    ShellUtils.sh!(['chown', Settings.tmc_user, Paths.work_dir + 'test.log'])
+    ShellUtils.sh!(['chown', Settings.tmc_user, Paths.log_dir + 'test.log'])
     ProcessUser.drop_root!
-    AppLog.set(Logger.new(Paths.work_dir + 'test.log'))
+    AppLog.set(Logger.new(Paths.log_dir + 'test.log'))
     @tempfiles = []
   end
   
