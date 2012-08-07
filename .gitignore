@@ -21,8 +21,8 @@
 /web/*.log
 /web/*.pid
 /web/cache
-/web/ext/*.o
-/web/ext/*.so
-/web/ext/Makefile
+/web/ext/**/*.o
+/web/ext/**/*.so
+/web/ext/**/Makefile
 /web/.idea
 

@@ -4,18 +4,22 @@ require 'shellwords'
 
 task :default => :ext
 
+extensions = ['misc_utils']
+
 desc "Compile C extensions"
-task :ext => 'ext/misc_utils_ext.so'
+task :ext => extensions.map {|ext| "ext/#{ext}/#{ext}_ext.so" }
 
-file 'ext/misc_utils_ext.so' => ['ext/Makefile', 'ext/misc_utils_ext.c'] do
-  Dir.chdir("ext") do
-    sh("make")
+extensions.each do |ext|
+  file "ext/#{ext}/#{ext}_ext.so" => ["ext/#{ext}/Makefile", "ext/#{ext}/#{ext}_ext.c"] do
+    Dir.chdir("ext/#{ext}") do
+      sh("make")
+    end
   end
-end
 
-file 'ext/Makefile' do
-  Dir.chdir("ext") do
-    sh("bundle exec ruby extconf.rb")
+  file "ext/#{ext}/Makefile" do
+    Dir.chdir("ext/#{ext}") do
+      sh("bundle exec ruby extconf.rb")
+    end
   end
 end
 
@@ -26,7 +30,7 @@ end
 
 desc "Clean built files"
 task :clean do
-  sh("rm -f ext/*.o ext/*.so ext/Makefile")
+  sh("rm -f ext/*/*.o ext/*/*.so ext/*/Makefile")
 end
 
 namespace :init do

@@ -1,10 +1,5 @@
 
-begin
-  require 'misc_utils_ext'
-rescue LoadError
-  system("rake ext")
-  require 'misc_utils_ext'
-end
+require 'misc_utils_ext'
 
 module MiscUtils
   # Methods defined in C:
