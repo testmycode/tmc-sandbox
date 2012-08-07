@@ -71,9 +71,11 @@ compile the small C extension with `rake ext`.
 
 Run tests by doing `sudo rake test` under `web/`. It requires `e2fsprogs` and `e2tools` to be installed.
 
-Start the service with `sudo webapp.rb` and stop it by sending that process SIGTERM.
+Start the service with `sudo webapp.rb run` and stop it with Ctrl-C.
 That script does the extra setup needed for network support, if configured,
 and then invokes `rackup` on the configured http port as the configured user account.
+
+The service may be installed as an init script by doing `sudo rake init:install` (or `rvmsudo ...`).
 
 The service should definitely be secured by a firewall or network segregation.
 

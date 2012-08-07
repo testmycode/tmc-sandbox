@@ -6,7 +6,7 @@ gem 'multi_json'
 gem 'activesupport'
 gem 'hash-deep-merge'
 gem 'sqlite3'
+gem 'daemons'
 
 gem 'test-unit'
 gem 'rack-test'
-

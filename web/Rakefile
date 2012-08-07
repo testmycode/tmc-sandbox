@@ -1,3 +1,6 @@
+require 'yaml'
+require 'erb'
+require 'shellwords'
 
 task :default => :ext
 
@@ -26,3 +29,45 @@ task :clean do
   sh("rm -f ext/*.o ext/*.so ext/Makefile")
 end
 
+namespace :init do
+  init_script_path = "/etc/init.d/tmc-sandbox"
+
+  desc "Install init scripts. RVM-compatible."
+  task :install do
+    rvm_current = `rvm current`
+    if $?.success?
+      puts "Using RVM."
+      rvm_current.strip!
+      rvm_info = YAML::load(`rvm info 2>/dev/null`) # Silenced rvm info complaint "RVM is not a function".
+      ruby_path = rvm_info[rvm_current]['binaries']['ruby']
+      env = rvm_info[rvm_current]['environment']
+    else
+      puts "Not using RVM. Don't forget rvmsudo if you use RVM."
+      ruby_path = `which ruby`
+      env = {}
+    end
+
+    def run_erb(template, webapp_dir, ruby_path, env)
+      ERB.new(template).result(binding)
+    end
+
+    script = run_erb(File.read('initscript.erb'), File.absolute_path('.'), ruby_path, env)
+
+    puts "Installing into #{init_script_path}"
+    File.open(init_script_path, 'w') {|f| f.write(script) }
+    sh("chmod a+x #{Shellwords.escape(init_script_path)}")
+
+    puts "Setting to start/stop by default"
+    sh("update-rc.d tmc-sandbox defaults")
+  end
+
+  desc "Uninstall init scripts."
+  task :uninstall do
+    sh("update-rc.d -f tmc-sandbox remove")
+    if File.exist?(init_script_path)
+      File.delete(init_script_path)
+    else
+      puts "#{init_script_path} doesn't exist."
+    end
+  end
+end

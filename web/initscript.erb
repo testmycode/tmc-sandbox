@@ -1,0 +1,32 @@
+#! /bin/sh -e
+<%
+require 'shellwords'
+%>
+
+### BEGIN INIT INFO
+# Provides:             tmc-sandbox
+# Required-Start:       $local_fs $remote_fs $network $syslog
+# Required-Stop:        $local_fs $remote_fs $network $syslog
+# Default-Start:        2 3 4 5
+# Default-Stop:         0 1 6
+# Short-Description:    TMC Sandbox
+### END INIT INFO
+
+WEBAPP_PATH=<%= Shellwords.escape(webapp_dir) %>
+RUBY_PATH=<%= Shellwords.escape(ruby_path) %>
+<% for key, value in env %>
+export <%= key %>=<%= Shellwords.escape(value) %>
+<% end %>
+
+case "$1" in
+  start|stop|restart|status)
+    cd "$WEBAPP_PATH"
+    "$RUBY_PATH" ./webapp.rb $1
+    ;;
+  *)
+    echo "Usage: $0 {start|stop|restart|status}"
+    exit 1
+    ;;
+esac
+
+exit 0
