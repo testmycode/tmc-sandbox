@@ -16,6 +16,11 @@ class SandboxInstance
 
     @instance = UmlInstance.new
 
+    @instance.subprocess_init do
+      `dd if=/dev/zero of=#{output_tar_path} bs=#{@settings['max_output_size']} count=1`
+      raise "Failed to create output tar file" unless $?.success?
+    end
+
     @instance.when_done do |process_status|
       exit_code = nil
       status =
@@ -57,16 +62,11 @@ class SandboxInstance
 
     nuke_work_dir!
     @notifier = notifier
-    FileUtils.cp(tar_file, task_tar_path)
+    FileUtils.mv(tar_file, task_tar_path)
 
     @plugin_images = @plugin_manager.run_hook(:extra_images, :instance => self).reduce({}, &:merge)
 
     @plugin_manager.run_hook(:before_exec, :instance => self, :tar_file => tar_file)
-
-    @instance.subprocess_init do
-      `dd if=/dev/zero of=#{output_tar_path} bs=#{@settings['max_output_size']} count=1`
-      raise "Failed to create output tar file" unless $?.success?
-    end
 
     file_locks = @plugin_images.map {|name, path|
       if name.to_s =~ /^(ubd.)c?(r?)c?$/
@@ -80,7 +80,7 @@ class SandboxInstance
     @instance.set_options({
       :disks => @plugin_images.merge({
         :ubdarc => Paths.rootfs_path,
-        :ubdbr => task_tar_path, #FIXME: @tar_file disappears right after we return!!!!!!!
+        :ubdbr => task_tar_path,
         :ubdc => output_tar_path
       }),
       :file_locks => file_locks,
@@ -88,7 +88,7 @@ class SandboxInstance
       :network => network_devices,
       :timeout => @settings['timeout'].to_i
     })
-
+    
     @instance.start
   end
 
