@@ -155,6 +155,10 @@ class UmlInstance
   end
 
   def running?
+    @subprocess && @subprocess.running?
+  end
+
+  def waitable?
     !!@subprocess
   end
 

@@ -101,7 +101,12 @@ class SandboxAppTest < MiniTest::Unit::TestCase
     assert_equal 2, json_response['busy_instances']
     assert_equal 3, json_response['total_instances']
 
-    app.kill_instances # finish faster
+    app.kill_instances
+
+    get '/status.json'
+    assert last_response.ok?
+    assert_equal 0, json_response['busy_instances']
+    assert_equal 3, json_response['total_instances']
   end
  
   def test_responds_with_error_on_bad_request
