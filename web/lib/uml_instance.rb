@@ -151,8 +151,7 @@ class UmlInstance
       SignalHandlers.with_trap(SignalHandlers.termination_signals, lambda { @subprocess.kill }) do
         @subprocess.wait
       end
-    else
-      nil
+      @subprocess = nil
     end
   end
 end
