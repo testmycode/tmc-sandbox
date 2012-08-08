@@ -150,7 +150,7 @@ class MavenCache < SandboxApp::Plugin
       pidfile.flock(File::LOCK_EX)
       if File.exist?(@daemon_pidfile)
         File.delete(@daemon_pidfile)
-        AppLog.warn("Manve daemon failed to unlink its pidfile before exiting")
+        AppLog.warn("Maven daemon failed to unlink its pidfile before exiting")
       end
       pidfile.flock(File::LOCK_UN)
     end
