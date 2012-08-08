@@ -53,6 +53,12 @@ timeout: 180
 app_log_file: log/app.log
 
 #
+# Provides a transcript of each UML run in log/vm.debug.<pid>.log
+# Turn off in production.
+#
+uml_debug: false
+
+#
 # Plugins and their configurations.
 # Relative paths are relative to this directory (`web/`).
 # Read the files under `plugins/` for documentation of each plugin.

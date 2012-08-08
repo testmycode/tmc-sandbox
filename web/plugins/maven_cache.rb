@@ -8,7 +8,7 @@ require 'digest'
 require 'shell_utils'
 require 'ext2_utils'
 require 'closeable_wrapper'
-require 'subprocess_group_with_timeout'
+require 'uml_instance'
 require 'disk_cache'
 require 'paths'
 require 'signal_handlers'
@@ -148,14 +148,17 @@ class MavenCache < SandboxApp::Plugin
   def wait_for_daemon
     File.open(@daemon_pidfile, File::RDONLY | File::CREAT) do |pidfile|
       pidfile.flock(File::LOCK_EX)
-      File.delete(@daemon_pidfile)
+      if File.exist?(@daemon_pidfile)
+        File.delete(@daemon_pidfile)
+        AppLog.warn("Manve daemon failed to unlink its pidfile before exiting")
+      end
       pidfile.flock(File::LOCK_UN)
     end
   end
 
   def extra_images(options)
     if File.exist?(@symlink)
-      {'ubddrc' => @symlink}
+      {:ubddrc => @symlink}
     else
       {}
     end
@@ -479,8 +482,8 @@ private
             AppLog.error "Maven cache daemon crashed: #{AppLog.fmt_exception($!)}"
           ensure
             begin
-              pidfile.close
               File.delete(@daemon_pidfile)
+              pidfile.close
             ensure
               exit!(0)
             end
@@ -581,65 +584,27 @@ private
   def run_uml_script(script_tar_path, log_tar_path, ro_image, rw_image, network = true)
     prepare_empty_log_tar_file(log_tar_path, "4M") if log_tar_path
 
-    subprocess = SubprocessGroupWithTimeout.new(@plugin_settings['download_timeout'].to_i, AppLog.get) do
-      cmd = []
-      cmd << Paths.kernel_path
-      cmd << "initrd=#{Paths.initrd_path}"
-      cmd << "mem=256M"
-      cmd << "ubdarc=#{Paths.rootfs_path}"
-      cmd << "ubdbr=#{script_tar_path}"
-      cmd << "ubdc=#{log_tar_path}" if log_tar_path
-      cmd << "ubddrc=#{ro_image}"
-      cmd << "nomount_ubdd"
-      cmd << "ubde=#{rw_image}"
-      cmd << "nomount_ubde"
-      cmd << "eth0=tuntap,#{@tap_device},,#{@tap_ip}" if network
-      cmd << "run_tarred_script:/dev/ubdb"
-      cmd << "con=null" # con=xterm can be used for debugging, if UML is modified to pass '-l' to it.
+    instance = UmlInstance.new
 
-      $stdin.reopen("/dev/null")
-      $stdout.reopen("/dev/null")
-      $stderr.reopen($stdout)
+    instance.set_options({
+      :disks => {
+        :ubdarc => Paths.rootfs_path,
+        :ubdbr => script_tar_path,
+        :ubdc => if log_tar_path then log_tar_path else nil end,
+        :ubddrc => ro_image,
+        :ubde => rw_image
+      },
+      :file_locks => [], # We do our own locking
+      :extra_options => ['nomount_ubdd', 'nomount_ubde'],
+      :command => 'run_tarred_script:/dev/ubdb',
+      :mem => '256M',
+      :network => if network then {:eth0 => "tuntap,#{@tap_device},,#{@tap_ip}"} else {} end,
+      :timeout => @plugin_settings['download_timeout'].to_i,
+      :nicelevel => Process.getpriority(Process::PRIO_PROCESS, 0) + 5
+    })
 
-      # Increase the nicelevel (lower the priority) of this process
-      oldprio = Process.getpriority(Process::PRIO_PROCESS, 0)
-      Process.setpriority(Process::PRIO_PROCESS, 0, oldprio + 5)
-
-      MiscUtils.cloexec_all_except([$stdin, $stdout, $stderr])
-      Process.exec(Shellwords.join(cmd.map(&:to_s)))
-    end
-
-    pin, pout = IO.pipe
-    subprocess.when_done do |status|
-      pin.close
-      begin
-        if status == :timeout
-          output = '0'
-        else
-          output = if status.success? then '1' else '0' end
-        end
-        pout.write(output)
-      rescue Errno::EPIPE
-        # Possible if the maven cache daemon is killed while we work. Ignore.
-      ensure
-        pout.close
-      end
-    end
-
-    success = false
-    SignalHandlers.with_trap(SignalHandlers.termination_signals, lambda { subprocess.kill }) do
-      begin
-        subprocess.start
-        pout.close
-        success = (pin.read == '1')
-        pin.close
-      rescue
-        success = false
-      end
-      subprocess.wait
-    end
-
-    success
+    instance.start
+    instance.wait
   end
 
   def with_script_tar_file(command, &block)

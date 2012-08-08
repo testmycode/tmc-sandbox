@@ -36,8 +36,6 @@ class SandboxAppTest < MiniTest::Unit::TestCase
   end
   
   def setup
-    ProcessUser.drop_root!
-
     ShellUtils.sh!(['chown', Settings.tmc_user, Paths.log_dir + 'test.log'])
     ProcessUser.drop_root!
     AppLog.set(Logger.new(Paths.log_dir + 'test.log'))

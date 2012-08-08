@@ -2,6 +2,8 @@ require 'paths'
 require 'subprocess_group_with_timeout'
 require 'shellwords'
 require 'app_log'
+require 'uml_instance'
+require 'tap_device'
 
 class SandboxInstance
   attr_reader :index
@@ -12,56 +14,9 @@ class SandboxInstance
     @plugin_manager = plugin_manager
     nuke_work_dir!
 
-    @subprocess = SubprocessGroupWithTimeout.new(@settings['timeout'].to_i, AppLog) do
-      begin
-        $stdin.close
-        $stdout.reopen("#{vm_log_path}", "w")
-        $stderr.reopen($stdout)
-        nocloexec = [$stdout, $stderr]
+    @instance = UmlInstance.new
 
-        `dd if=/dev/zero of=#{output_tar_path} bs=#{@settings['max_output_size']} count=1`
-        exit!(201) unless $?.success?
-
-        args = [
-          "#{Paths.kernel_path}",
-          "initrd=#{Paths.initrd_path}",
-          "ubdarc=#{Paths.rootfs_path}",
-          "ubdbr=#{@tar_file}",
-          "ubdc=#{output_tar_path}",
-          "mem=#{@settings['instance_ram']}",
-          "con=null"
-        ]
-
-        for name, path in @plugin_images
-          debug "Adding #{name}=#{path}"
-          if name =~ /^(ubd.)(r?)(c?)$/
-            args << "#{name}=#{path}"
-
-            lock_type = if $2 == 'r' then File::LOCK_SH else File::LOCK_EX end
-            f = File.open(path, File::RDONLY)
-            f.flock(lock_type)
-            nocloexec << f
-          else
-            error "Error in plugin_images"
-            exit!(202)
-          end
-        end
-
-        args += network_args
-
-        cmd = Shellwords.join(args)
-
-        debug "PID #{Process.pid} executing: #{cmd}"
-        MiscUtils.cloexec_all_except(nocloexec)
-        Process.exec(cmd)
-      rescue
-        error("Sandbox execution failed: " + AppLog.fmt_exception($!))
-      ensure
-        exit!(210)
-      end
-    end
-
-    @subprocess.when_done do |process_status|
+    @instance.when_done do |process_status|
       exit_code = nil
       status =
         if process_status == :timeout
@@ -107,7 +62,33 @@ class SandboxInstance
     @plugin_images = @plugin_manager.run_hook(:extra_images, :instance => self).reduce({}, &:merge)
 
     @plugin_manager.run_hook(:before_exec, :instance => self, :tar_file => tar_file)
-    @subprocess.start
+
+    @instance.subprocess_init do
+      `dd if=/dev/zero of=#{output_tar_path} bs=#{@settings['max_output_size']} count=1`
+      raise "Failed to create output tar file" unless $?.success?
+    end
+
+    file_locks = @plugin_images.map {|name, path|
+      if name.to_s =~ /^(ubd.)c?(r?)c?$/
+        lock_type = if $2 == 'r' then File::LOCK_SH else File::LOCK_EX end
+        [path, lock_type]
+      else
+        raise "Invalid plugin image name: #{name}"
+      end
+    }
+
+    @instance.set_options({
+      :disks => @plugin_images.merge({
+        :ubdarc => Paths.rootfs_path,
+        :ubdbr => @tar_file,
+        :ubdc => output_tar_path
+      }),
+      :file_locks => file_locks,
+      :mem => @settings['instance_ram'],
+      :network => network_devices,
+      :timeout => @settings['timeout'].to_i
+    })
+    @instance.start
   end
 
   def idle?
@@ -115,15 +96,15 @@ class SandboxInstance
   end
 
   def busy?
-    @subprocess.running?
+    @instance.running?
   end
 
   def wait
-    @subprocess.wait
+    @instance.wait
   end
 
   def kill
-    @subprocess.kill
+    @instance.kill
   end
 
 private
@@ -136,10 +117,6 @@ private
 
   def instance_work_dir
     Paths.work_dir + @index.to_s
-  end
-
-  def vm_log_path
-    instance_work_dir + 'vm.log'
   end
 
   def output_tar_path
@@ -160,15 +137,15 @@ private
     end
   end
 
-  def network_args
+  def network_devices
     if @settings['network'] && @settings['network']['enabled']
       i = @index
       tapdev = "tap_tmc#{i}"
       ip_range_start = @settings['network']['private_ip_range_start']
       ip = "192.168.#{ip_range_start + i}.1"
-      ["eth0=tuntap,#{tapdev},,#{ip}"]
+      {:eth0 => TapDevice.new(tapdev, ip, Settings.tmc_user)}
     else
-      []
+      {}
     end
   end
 

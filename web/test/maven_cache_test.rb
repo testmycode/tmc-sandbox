@@ -3,6 +3,7 @@ require './plugins/maven_cache'
 require 'paths'
 require 'process_user'
 require 'test_network_setup'
+require 'fileutils'
 
 # This test is unfortunately VERY slow, since Maven in UML, even through a HTTP cache,
 # needs very many dependencies when starting from scratch and is quite slow at downloading them.
@@ -15,6 +16,7 @@ class MavenCacheTest < MiniTest::Unit::TestCase
     AppLog.set(Logger.new(Paths.log_dir + 'test.log'))
 
     @tmpdir = Dir.mktmpdir("maven_cache_test")
+    FileUtils.mkdir_p(maven_cache_work_dir)
 
     @test_settings = Settings.get.clone
     @conf = @test_settings['plugins']['maven_cache']
