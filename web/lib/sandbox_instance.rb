@@ -66,7 +66,7 @@ class SandboxInstance
 
     @plugin_images = @plugin_manager.run_hook(:extra_images, :instance => self).reduce({}, &:merge)
 
-    @plugin_manager.run_hook(:before_exec, :instance => self, :tar_file => tar_file)
+    @plugin_manager.run_hook(:before_exec, :instance => self, :tar_file => task_tar_path)
 
     file_locks = @plugin_images.map {|name, path|
       if name.to_s =~ /^(ubd.)c?(r?)c?$/
@@ -88,7 +88,7 @@ class SandboxInstance
       :network => network_devices,
       :timeout => @settings['timeout'].to_i
     })
-    
+
     @instance.start
   end
 
