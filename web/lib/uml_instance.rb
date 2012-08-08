@@ -56,6 +56,7 @@ class UmlInstance
   end
 
   def start
+    wait if !running? && waitable?
     raise "Already running" if @subprocess
 
     @subprocess = SubprocessGroupWithTimeout.new(self.timeout, log) do
