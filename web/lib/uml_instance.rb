@@ -127,28 +127,7 @@ class UmlInstance
       end
     end
 
-    pin, pout = IO.pipe
-    @subprocess.when_done do |status|
-      begin
-        @when_done.call(status) if @when_done
-      rescue
-        status = :when_done_fail
-      ensure
-        pin.close
-        begin
-          if status == :timeout || status == :when_done_fail
-            output = '0'
-          else
-            output = if status.success? then '1' else '0' end
-          end
-          pout.write(output)
-        rescue Errno::EPIPE
-          # Possible if the maven cache daemon is killed while we work. Ignore.
-        ensure
-          pout.close
-        end
-      end
-    end
+    @subprocess.when_done(&@when_done) if @when_done
 
     @subprocess.start
 
@@ -169,23 +148,9 @@ class UmlInstance
 
   def wait
     if @subprocess
-      success = false
       SignalHandlers.with_trap(SignalHandlers.termination_signals, lambda { @subprocess.kill }) do
-        begin
-          @subprocess.start
-          pout.close
-          success = (pin.read == '1')
-          pin.close
-        rescue
-          success = false
-        end
         @subprocess.wait
       end
-
-      @@debug_ports.unreserve_port(@debug_port) if @debug_port
-      @subprocess = nil
-
-      success
     else
       nil
     end
