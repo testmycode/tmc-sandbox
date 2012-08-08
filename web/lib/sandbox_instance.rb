@@ -56,8 +56,8 @@ class SandboxInstance
     raise 'busy' if busy?
 
     nuke_work_dir!
-    @tar_file = tar_file
     @notifier = notifier
+    FileUtils.cp(tar_file, task_tar_path)
 
     @plugin_images = @plugin_manager.run_hook(:extra_images, :instance => self).reduce({}, &:merge)
 
@@ -80,7 +80,7 @@ class SandboxInstance
     @instance.set_options({
       :disks => @plugin_images.merge({
         :ubdarc => Paths.rootfs_path,
-        :ubdbr => @tar_file,
+        :ubdbr => task_tar_path, #FIXME: @tar_file disappears right after we return!!!!!!!
         :ubdc => output_tar_path
       }),
       :file_locks => file_locks,
@@ -88,6 +88,7 @@ class SandboxInstance
       :network => network_devices,
       :timeout => @settings['timeout'].to_i
     })
+
     @instance.start
   end
 
@@ -121,6 +122,10 @@ private
 
   def output_tar_path
     instance_work_dir + 'output.tar'
+  end
+
+  def task_tar_path
+    instance_work_dir + 'task.tar'
   end
 
   def extract_file_from_tar(tar_path, file_name)
