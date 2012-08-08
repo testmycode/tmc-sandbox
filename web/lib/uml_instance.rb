@@ -39,6 +39,7 @@ class UmlInstance
       :command => nil, # nil for normal sandboxes. e.g. run_tarred_script:/dev/ubdb
       :timeout => nil,
       :nicelevel => 0,
+      :uml_dir => Paths.work_dir + 'uml',
       :log => AppLog.get
     }
   end
@@ -77,6 +78,7 @@ class UmlInstance
         cmd << self.binary
         cmd << "initrd=#{self.initrd}"
         cmd << "mem=#{self.mem}"
+        cmd << "uml_dir=#{self.uml_dir}"
 
         for name, path in self.disks
           cmd << "#{name}=#{path}" if path != nil
