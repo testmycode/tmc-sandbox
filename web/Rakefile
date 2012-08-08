@@ -62,7 +62,7 @@ namespace :init do
     sh("chmod a+x #{Shellwords.escape(init_script_path)}")
 
     puts "Setting to start/stop by default"
-    sh("update-rc.d tmc-sandbox defaults")
+    sh("update-rc.d tmc-sandbox defaults 90 10")
   end
 
   desc "Uninstall init scripts."
