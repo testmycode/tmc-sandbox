@@ -4,7 +4,7 @@ gem 'rake'
 gem 'rack'
 gem 'multi_json'
 gem 'activesupport'
-gem 'hash-deep-merge'
+gem 'hash-deep-merge' # TODO: this is buggy - it doesn't always clone stuff properly. Use active_support/core_ext/hash/deep_merge instead.
 gem 'sqlite3'
 gem 'daemons'
 
