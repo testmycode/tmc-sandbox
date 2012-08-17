@@ -74,6 +74,9 @@ if `cat /proc/cmdline | grep -E -q 'eth0=tuntap'`; then
     IP_ADDR="$INITIAL_PART$LAST_NUMBER"
     echo "Using internal IP address $IP_ADDR"
     
+    echo "127.0.0.1 localhost" > /etc/hosts
+    ifconfig lo 127.0.0.1 up
+    
     ifconfig eth0 $IP_ADDR up
     route add -host $IP_ADDR gw $GW_ADDR
     echo "nameserver $GW_ADDR" > /etc/resolv.conf
