@@ -604,7 +604,9 @@ private
     })
 
     instance.start
-    instance.wait
+    status = instance.wait
+
+    status == nil || status.success?
   end
 
   def with_script_tar_file(command, &block)
