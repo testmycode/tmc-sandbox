@@ -11,9 +11,20 @@ OPTIONS=__OPTIONS__
 mkdir -p /mnt/ro
 mkdir -p /mnt/rw
 
+do_fsck() {
+  set +e
+  fsck -y $1
+  local EXIT_CODE=$?
+  set -e
+  if [ \! \( $EXIT_CODE -eq 0 -o $EXIT_CODE -eq 1 \) ]; then
+    echo "fsck -y $1 failed!"
+    exit $EXIT_CODE
+  fi
+}
+
 case "$COMMAND" in
   getdeps)
-    fsck -y $RW_IMAGE
+    do_fsck $RW_IMAGE
     mount -o rw $RW_IMAGE /mnt/rw
     chown tmc /mnt/rw # in case it's the first mount
     
@@ -29,7 +40,7 @@ case "$COMMAND" in
     exit $EXIT_CODE
     ;;
   rsync)
-    fsck -y $RW_IMAGE
+    do_fsck $RW_IMAGE
     mount -o ro $RO_IMAGE /mnt/ro
     mount -o rw $RW_IMAGE /mnt/rw
     
