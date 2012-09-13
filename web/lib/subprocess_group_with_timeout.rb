@@ -107,9 +107,6 @@ class SubprocessGroupWithTimeout
         @intermediate_pid = nil
         SignalHandlers.remove_trap(SignalHandlers.termination_signals, @signal_handler)
       end
-      status
-    else
-      nil
     end
   end
   

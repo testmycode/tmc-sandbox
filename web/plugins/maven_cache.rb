@@ -201,7 +201,8 @@ class MavenCache < SandboxApp::Plugin
     if post_request?(req)
       raise SandboxApp::BadRequest.new('missing file parameter') if !req['file'] || !req['file'][:tempfile]
       run_tests = !req['run_tests'].blank?
-      start_caching_deps(req['file'][:tempfile].path, :run_tests => run_tests, :never_skip => true)
+      never_skip = !req['never_skip'].blank?
+      start_caching_deps(req['file'][:tempfile].path, :run_tests => run_tests, :never_skip => never_skip)
       respdata[:status] = 'ok'
     elsif main_page_request?(req)
       serve_main_page(req, resp, respdata)
@@ -249,6 +250,8 @@ class MavenCache < SandboxApp::Plugin
       <label for="run-tests">mvn tmc:test</label><br />
       <input type="radio" id="just-deps" name="run_tests" value="" />
       <label for="just-deps">mvn dependency:go-offline</label><br />
+
+      <input type="hidden" name="never_skip" value="1" />
 
       <input type="submit" />
     </form>
@@ -447,24 +450,23 @@ private
   def add_task(project_file, options = {})
     begin
       with_flock(@tasks_lock) do |tasks_lock_file|
-        task_file = Tempfile.new(["task", ".tar"], @tasks_dir)
-        task_file.close
+        task_file = ShellUtils.sh!(['mktemp', '--suffix=.tar', '--tmpdir=' + @tasks_dir, 'task.XXXXXXXX']).strip
 
         if pom_xml_file?(project_file)
           AppLog.info("Adding project pom.xml to maven cache")
           pom_file = "#{@work_dir}/pom.xml"
           begin
             FileUtils.cp(project_file, pom_file)
-            ShellUtils.sh!(['tar', '-C', @work_dir, '-cf', task_file.path, "pom.xml"])
+            ShellUtils.sh!(['tar', '-C', @work_dir, '-cf', task_file, "pom.xml"])
           ensure
             File.delete(pom_file)
           end
         else
           AppLog.info("Adding project tar file to maven cache")
-          FileUtils.cp(project_file, task_file.path)
+          FileUtils.cp(project_file, task_file)
         end
 
-        metadata_path = task_file.path.sub /\.tar$/, '.json'
+        metadata_path = task_file.sub /\.tar$/, '.json'
         File.open(metadata_path, 'wb') do |f|
           f.write(ActiveSupport::JSON.encode(options))
         end
@@ -571,6 +573,7 @@ private
         else
           task_options = ActiveSupport::JSON.decode(File.read(@current_task_json_path), :symbolize_keys => true)
           if task_options[:never_skip] || !can_skip?(@current_task_path)
+
             AppLog.debug "Downloading Maven dependencies into #{imgpair.backimg.path}"
             if download_deps(@current_task_path, imgpair.backimg.path, task_options[:run_tests])
               AppLog.debug "Dependencies downloaded successfully"
@@ -578,10 +581,13 @@ private
             else
               AppLog.warn "Failed to download dependencies"
             end
+
           else
             AppLog.debug "Skipping downloading Maven dependencies. This project was recently downloaded."
           end
+
           FileUtils.rm_f(@current_task_path)
+          FileUtils.rm_f(@current_task_json_path)
         end
         
       end
@@ -633,10 +639,24 @@ private
       :vm_log => log_path
     })
 
-    instance.start
-    status = instance.wait
+    pin, pout = IO.pipe
+    instance.when_done do |status| # Run in another process
+      pin.close
+      ok = status.respond_to?(:success?) && status.success?
+      pout.write(if ok then "1" else "0" end)
+      pout.close
+    end
 
-    status == nil || status.success?
+    instance.start
+
+    pout.close
+    ok = pin.read == "1"
+
+    instance.wait
+
+    AppLog.warn("UML script failed. Log follows:\n#{File.read(log_path)}") if !ok
+
+    ok
   end
 
   def with_script_tar_file(command, script_options = [], &block)
