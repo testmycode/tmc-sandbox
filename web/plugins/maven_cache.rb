@@ -534,7 +534,7 @@ private
         # and move one to be processed if so.
         exiting = false
         with_flock(@tasks_lock) do
-          file = (Dir.entries(@tasks_dir) - ['.', '..']).select {|name| name.end_with?('.tar') }.first
+          file = next_task_file
           if file != nil
             FileUtils.mv("#{@tasks_dir}/#{file}", @current_task_path)
             FileUtils.mv("#{@tasks_dir}/#{file.sub(/\.tar$/, '.json')}", @current_task_json_path)
@@ -559,7 +559,7 @@ private
           # Check if a new task has appeared while we were swapping and rsyncing.
           # If so, we must not exit yet, since no daemon would then handle the task.
           with_flock(@tasks_lock) do
-            if (Dir.entries(@tasks_dir) - ['.', '..']).empty?
+            if !next_task_file
               # Exit while holding tasksdir lock.
               # Prevents the race where a sandbox adds a task but sees the exiting daemon as active.
               AppLog.debug "Maven cache daemon exiting."
@@ -588,6 +588,10 @@ private
     ensure
       imgpair.close
     end
+  end
+
+  def next_task_file
+    (Dir.entries(@tasks_dir) - ['.', '..']).select {|name| name.end_with?('.tar') }.first
   end
   
   def download_deps(tar_file, backimg_path, run_tests)
