@@ -12,6 +12,8 @@ require 'uml_instance'
 require 'disk_cache'
 require 'paths'
 require 'signal_handlers'
+require 'active_support/json'
+require 'active_support/core_ext/object/blank'
 
 #
 # Recognizes Maven projects and downloads their dependencies to a local repository
@@ -78,9 +80,10 @@ class MavenCache < SandboxApp::Plugin
     FileUtils.mkdir_p(@tasks_dir)
     
     @current_task_path = "#{@work_dir}/current-task.tar"
-    @log_tar_path = "#{@work_dir}/log.tar"
-    @rsync_log_tar_path = "#{@work_dir}/rsync-log.tar"
-    @file_list_log_tar_path = "#{@work_dir}/list-log.tar"
+    @current_task_json_path = "#{@work_dir}/current-task.json"
+    @log_path = "#{@work_dir}/download.vm.log"
+    @rsync_log_path = "#{@work_dir}/rsync.vm.log"
+    @file_list_log_path = "#{@work_dir}/list.vm.log"
     @tasks_lock = "#{@work_dir}/tasks.lock"
     @daemon_pidfile = "#{@work_dir}/daemon.pid"
     
@@ -108,11 +111,16 @@ class MavenCache < SandboxApp::Plugin
     wait_for_daemon
   end
   
-  def start_caching_deps(project_file)
+  def start_caching_deps(project_file, options = {})
+    options = {
+      :run_tests => false,
+      :never_skip => false
+    }.merge options
+
     if pom_xml_file?(project_file) || maven_project?(project_file)
       @maven_projects_seen += 1
-      if !can_skip?(project_file)
-        add_task(project_file)
+      if options[:never_skip] || !can_skip?(project_file)
+        add_task(project_file, options)
       else
         @maven_projects_skipped_immediately += 1
         AppLog.debug "Maven project's deps already cached. Skipping."
@@ -170,10 +178,10 @@ class MavenCache < SandboxApp::Plugin
     img.lock(File::LOCK_SH)
     begin
       tmpfile = Tempfile.new(['filelist', '.tar'])
-      prepare_empty_log_tar_file(tmpfile.path, '8M')
+      make_blank_file(tmpfile.path, '8M')
       begin
         AppLog.debug("Reading file list from #{File.readlink(@symlink)}")
-        run_uml_command('filelist', @file_list_log_tar_path, @symlink, tmpfile.path, false)
+        run_uml_command('filelist', @file_list_log_path, @symlink, tmpfile.path, false)
         output = ShellUtils.sh!(['tar', '--to-stdout', '-xf', tmpfile.path, 'output.txt'])
         return output.split("\n")
       ensure
@@ -192,7 +200,8 @@ class MavenCache < SandboxApp::Plugin
   def serve_request(req, resp, respdata)
     if post_request?(req)
       raise SandboxApp::BadRequest.new('missing file parameter') if !req['file'] || !req['file'][:tempfile]
-      start_caching_deps(req['file'][:tempfile].path)
+      run_tests = !req['run_tests'].blank?
+      start_caching_deps(req['file'][:tempfile].path, :run_tests => run_tests, :never_skip => true)
       respdata[:status] = 'ok'
     elsif main_page_request?(req)
       serve_main_page(req, resp, respdata)
@@ -235,6 +244,12 @@ class MavenCache < SandboxApp::Plugin
     <h3>Add POM file</h3>
     <form action="/maven_cache/populate.json" enctype="multipart/form-data" method="post">
       POM file: <input type="file" name="file" /><br />
+
+      <input type="radio" id="run-tests" name="run_tests" value="1" checked="checked" />
+      <label for="run-tests">mvn tmc:test</label><br />
+      <input type="radio" id="just-deps" name="run_tests" value="" />
+      <label for="just-deps">mvn dependency:go-offline</label><br />
+
       <input type="submit" />
     </form>
   </div>
@@ -429,11 +444,12 @@ private
     Digest::SHA2.hexdigest(pom_xml)
   end
 
-  def add_task(project_file)
+  def add_task(project_file, options = {})
     begin
       with_flock(@tasks_lock) do |tasks_lock_file|
         task_file = Tempfile.new(["task", ".tar"], @tasks_dir)
         task_file.close
+
         if pom_xml_file?(project_file)
           AppLog.info("Adding project pom.xml to maven cache")
           pom_file = "#{@work_dir}/pom.xml"
@@ -446,6 +462,11 @@ private
         else
           AppLog.info("Adding project tar file to maven cache")
           FileUtils.cp(project_file, task_file.path)
+        end
+
+        metadata_path = task_file.path.sub /\.tar$/, '.json'
+        File.open(metadata_path, 'wb') do |f|
+          f.write(ActiveSupport::JSON.encode(options))
         end
 
         start_daemon_unless_running([tasks_lock_file])
@@ -513,9 +534,10 @@ private
         # and move one to be processed if so.
         exiting = false
         with_flock(@tasks_lock) do
-          file = (Dir.entries(@tasks_dir) - ['.', '..']).first
+          file = (Dir.entries(@tasks_dir) - ['.', '..']).select {|name| name.end_with?('.tar') }.first
           if file != nil
             FileUtils.mv("#{@tasks_dir}/#{file}", @current_task_path)
+            FileUtils.mv("#{@tasks_dir}/#{file.sub(/\.tar$/, '.json')}", @current_task_json_path)
           else
             AppLog.debug "Maven cache daemon sees no more tasks."
             exiting = true
@@ -547,9 +569,10 @@ private
             end
           end
         else
-          if !can_skip?(@current_task_path)
+          task_options = ActiveSupport::JSON.decode(File.read(@current_task_json_path), :symbolize_keys => true)
+          if task_options[:never_skip] || !can_skip?(@current_task_path)
             AppLog.debug "Downloading Maven dependencies into #{imgpair.backimg.path}"
-            if download_deps(@current_task_path, imgpair.backimg.path)
+            if download_deps(@current_task_path, imgpair.backimg.path, task_options[:run_tests])
               AppLog.debug "Dependencies downloaded successfully"
               mark_pom_file_processed_in_cache(@current_task_path)
             else
@@ -567,30 +590,32 @@ private
     end
   end
   
-  def download_deps(tar_file, backimg_path)
-    run_uml_command('getdeps', @log_tar_path, tar_file, backimg_path)
+  def download_deps(tar_file, backimg_path, run_tests)
+    script_options = []
+    if run_tests
+      script_options << '--run-tests'
+      AppLog.debug "Will run tests to get all dependencies"
+    end
+    run_uml_command('getdeps', @log_path, tar_file, backimg_path, true, script_options)
   end
   
   def rsync(from, to)
-    run_uml_command('rsync', @rsync_log_tar_path, from, to)
+    run_uml_command('rsync', @rsync_log_path, from, to, true)
   end
 
-  def run_uml_command(command, log_tar_path, ro_image, rw_image, network = true)
-    with_script_tar_file(command) do |script_tar_file|
-      run_uml_script(script_tar_file, log_tar_path, ro_image, rw_image, network)
+  def run_uml_command(command, log_path, ro_image, rw_image, network = true, script_options = [])
+    with_script_tar_file(command, script_options) do |script_tar_file|
+      run_uml_script(script_tar_file, log_path, ro_image, rw_image, network)
     end
   end
 
-  def run_uml_script(script_tar_path, log_tar_path, ro_image, rw_image, network = true)
-    prepare_empty_log_tar_file(log_tar_path, "4M") if log_tar_path
-
+  def run_uml_script(script_tar_path, log_path, ro_image, rw_image, network = true)
     instance = UmlInstance.new
 
     instance.set_options({
       :disks => {
         :ubdarc => Paths.rootfs_path,
         :ubdbr => script_tar_path,
-        :ubdc => if log_tar_path then log_tar_path else nil end,
         :ubddrc => ro_image,
         :ubde => rw_image
       },
@@ -600,7 +625,8 @@ private
       :mem => '256M',
       :network => if network then {:eth0 => "tuntap,#{@tap_device},,#{@tap_ip}"} else {} end,
       :timeout => @plugin_settings['download_timeout'].to_i,
-      :nicelevel => Process.getpriority(Process::PRIO_PROCESS, 0) + 5
+      :nicelevel => Process.getpriority(Process::PRIO_PROCESS, 0) + 5,
+      :vm_log => log_path
     })
 
     instance.start
@@ -609,12 +635,14 @@ private
     status == nil || status.success?
   end
 
-  def with_script_tar_file(command, &block)
+  def with_script_tar_file(command, script_options = [], &block)
+    options_str = Shellwords.join(script_options)
+
     Tempfile.open(['script', '.tar']) do |script_tar_file|
       begin
         Dir.mktmpdir do |tmpdir|
           File.open("#{tmpdir}/tmc-run", 'wb') do |f|
-            f.write(File.read("#{@script_path}/tmc-run").gsub('__COMMAND__', command))
+            f.write(File.read("#{@script_path}/tmc-run").gsub('__COMMAND__', command).gsub('__OPTIONS__', options_str))
           end
           FileUtils.cp("#{@script_path}/getdeps.sh", "#{tmpdir}/getdeps.sh")
           ShellUtils.sh! [
@@ -633,9 +661,9 @@ private
       end
     end
   end
-  
-  def prepare_empty_log_tar_file(log_tar_path, size)
-    ShellUtils.sh! ["dd", "if=/dev/zero", "of=#{log_tar_path}", "bs=#{size}", "count=1"]
+
+  def make_blank_file(path, size)
+    ShellUtils.sh! ["dd", "if=/dev/zero", "of=#{path}", "bs=#{size}", "count=1"]
   end
 end
 

@@ -1,19 +1,12 @@
 #!/bin/sh -e
 
 EXERCISE_FILE=/dev/ubdb
-LOG_FILE=/dev/ubdc
 RO_IMAGE=/dev/ubdd
 RW_IMAGE=/dev/ubde
 
-# Run self so that output is logged
-if [ -z "$LOGGING" ]; then
-  export LOGGING=1
-  $0 $@ > /tmc/log.txt 2>&1
-  tar -C /tmc -cf $LOG_FILE log.txt || true
-  exit 0
-fi
-
+# The following are set by the system before this script is given to the VM
 COMMAND=__COMMAND__
+OPTIONS=__OPTIONS__
 
 mkdir -p /mnt/ro
 mkdir -p /mnt/rw
@@ -28,7 +21,7 @@ case "$COMMAND" in
     chmod +x /tmc/getdeps.sh
 
     set +e
-    su tmc -c /tmc/getdeps.sh
+    su tmc -c "/tmc/getdeps.sh $OPTIONS"
     EXIT_CODE=$?
     set -e
 
