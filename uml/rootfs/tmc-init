@@ -119,15 +119,14 @@ else
 
   echo "Starting tmc-run"
   chmod +x tmc-run
-  EXIT_CODE=`( set +e; su tmc -c ./tmc-run > /dev/null 2>&1; echo $?; true )`
+  ( set +e; su tmc -c ./tmc-run; echo -n $? > exit_code.txt; true )
+  EXIT_CODE=`cat exit_code.txt`
   echo "Completed tmc-run. Exit code: $EXIT_CODE"
   
   # Write the result
   [ -e test_output.txt ] || touch test_output.txt
   summarize_text_file stdout.txt
   summarize_text_file stderr.txt
-
-  echo $EXIT_CODE > exit_code.txt
 
   tar c test_output.txt exit_code.txt stdout.txt stderr.txt > $OUTPUT_FILE
 fi
