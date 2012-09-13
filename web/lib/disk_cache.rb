@@ -74,11 +74,12 @@ class DiskCache
 
 private
   def with_db(&block)
-    ret = nil
-    SQLite3::Database.new(@path) do |db|
-      ret = block.call(db)
+    db = SQLite3::Database.new(@path)
+    begin
+      block.call(db)
+    ensure
+      db.close
     end
-    ret
   end
 
   def get_db(db, key)
