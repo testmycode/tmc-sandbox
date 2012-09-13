@@ -18,7 +18,7 @@ class LockFile
   end
 
   def with_lock(lock_type = File::LOCK_EX, &block)
-    @file.flock(lock_type)
+    ret = @file.flock(lock_type)
     begin
       return false if (lock_type & File::LOCK_NB != 0) && ret == false
 
