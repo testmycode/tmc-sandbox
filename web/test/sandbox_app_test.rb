@@ -59,6 +59,9 @@ class SandboxAppTest < MiniTest::Unit::TestCase
     assert_equal 'finished', @notify_params['status']
     assert_equal '0', @notify_params['exit_code']
     assert_equal 'this is the test_output.txt of fixtures/successful', @notify_params['test_output'].strip
+    assert_equal 'this is the stdout.txt of fixtures/successful', @notify_params['stdout'].strip
+    assert_equal 'this is the stderr.txt of fixtures/successful', @notify_params['stderr'].strip
+    assert @notify_params['vm_log'].include?('TMC customized initrd starting'), "correct vm_log not passed in completion notification"
   end
 
   def test_can_respond_to_multiple_requests

@@ -48,7 +48,8 @@ class SandboxInstance
       output = {
         'test_output' => try_extract_file_from_tar(output_tar_path, 'test_output.txt'),
         'stdout' => try_extract_file_from_tar(output_tar_path, 'stdout.txt'),
-        'stderr' => try_extract_file_from_tar(output_tar_path, 'stderr.txt')
+        'stderr' => try_extract_file_from_tar(output_tar_path, 'stderr.txt'),
+        'vm_log' => File.read(vm_log_path)
       }
 
       @notifier.call(status, exit_code, output) if @notifier
@@ -86,7 +87,8 @@ class SandboxInstance
       :file_locks => file_locks,
       :mem => @settings['instance_ram'],
       :network => network_devices,
-      :timeout => @settings['timeout'].to_i
+      :timeout => @settings['timeout'].to_i,
+      :vm_log => vm_log_path
     })
 
     @instance.start
@@ -126,6 +128,10 @@ private
 
   def task_tar_path
     instance_work_dir + 'task.tar'
+  end
+
+  def vm_log_path
+    instance_work_dir + 'vm.log'
   end
 
   def extract_file_from_tar(tar_path, file_name)

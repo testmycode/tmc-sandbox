@@ -1,3 +1,5 @@
 #!/bin/sh
 echo "this is the test_output.txt of fixtures/successful" > test_output.txt
+echo "this is the stdout.txt of fixtures/successful" > stdout.txt
+echo "this is the stderr.txt of fixtures/successful" > stderr.txt
 exit 0

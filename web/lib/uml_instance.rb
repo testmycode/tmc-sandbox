@@ -4,15 +4,6 @@ require 'settings'
 require 'tap_device'
 
 class UmlInstance
-  def self.debug?
-    Settings.get['uml_debug']
-  end
-
-  def debug?
-    self.class.debug?
-  end
-
-
   def initialize(options = {})
     @options = default_options.merge(options)
   end
@@ -40,7 +31,8 @@ class UmlInstance
       :timeout => nil,
       :nicelevel => 0,
       :uml_dir => Paths.work_dir + 'uml',
-      :log => AppLog.get
+      :log => AppLog.get,
+      :vm_log => nil # May be an IO or a file name
     }
   end
 
@@ -63,8 +55,8 @@ class UmlInstance
     @subprocess = SubprocessGroupWithTimeout.new(self.timeout, log) do
       begin
         $stdin.reopen("/dev/null")
-        if debug?
-          $stdout.reopen(Paths.log_dir + "vm.debug.#{Process.pid}.log")
+        if options[:vm_log]
+          $stdout.reopen(options[:vm_log])
         else
           $stdout.reopen("/dev/null")
         end
@@ -102,7 +94,7 @@ class UmlInstance
 
         cmd += self.extra_options
 
-        if debug?
+        if options[:vm_log]
           cmd << "con=null,fd:1"
         else
           cmd << "con=null"
