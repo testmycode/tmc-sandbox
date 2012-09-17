@@ -54,6 +54,8 @@ class UmlInstance
 
     @subprocess = SubprocessGroupWithTimeout.new(self.timeout, log) do
       begin
+        @subprocess_init.call if @subprocess_init
+        
         $stdin.reopen("/dev/null")
         if options[:vm_log]
           $stdout.reopen(options[:vm_log])
@@ -61,8 +63,6 @@ class UmlInstance
           $stdout.reopen("/dev/null")
         end
         $stderr.reopen($stdout)
-
-        @subprocess_init.call if @subprocess_init
 
         nocloexec = [$stdin, $stdout, $stderr]
 

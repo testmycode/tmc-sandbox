@@ -1,5 +1,6 @@
 require 'paths'
 require 'subprocess_group_with_timeout'
+require 'shell_utils'
 require 'shellwords'
 require 'app_log'
 require 'uml_instance'
@@ -17,11 +18,14 @@ class SandboxInstance
     @instance = UmlInstance.new
 
     @instance.subprocess_init do
-      `dd if=/dev/zero of=#{output_tar_path} bs=#{@settings['max_output_size']} count=1`
-      raise "Failed to create output tar file" unless $?.success?
+      wait_for_cooldown
+
+      ShellUtils.sh!(["dd", "if=/dev/zero", "of=#{output_tar_path}", "bs=#{@settings['max_output_size']}", "count=1"])
     end
 
     @instance.when_done do |process_status|
+      write_exit_time
+
       exit_code = nil
       status =
         if process_status == :timeout
@@ -61,6 +65,7 @@ class SandboxInstance
   def start(tar_file, &notifier)
     raise 'busy' if busy?
 
+    read_exit_time
     nuke_work_dir!
     @notifier = notifier
     FileUtils.mv(tar_file, task_tar_path)
@@ -174,5 +179,47 @@ private
 
   def log_with_level(level, msg)
     AppLog.send(level, "Instance #{@index}: #{msg}")
+  end
+
+
+  # We have problems with network setup giving the following errors
+  # TUNSETIFF failed, errno = 16
+  # SIOCSIFFLAGS: Device or resource busy
+  # This is hard to debug because the error is pretty rare.
+  # We hope that adding a cooldown between the uses of the same
+  # instance (the same tap device) will avoid this.
+  def write_exit_time
+    begin
+      File.open(exit_time_file, 'wb') do |f|
+        f.write(Time.now.to_f)
+      end
+    rescue
+      warn("Failed to write exit_time.tmp: #{$!}")
+    end
+  end
+
+  def read_exit_time
+    @exit_time = nil
+    if File.exist?(exit_time_file)
+      begin
+        @exit_time = Time.at(File.read(exit_time_file).to_f)
+      rescue
+        warn("Failed to read exit_time.tmp")
+      end
+    end
+  end
+
+  def wait_for_cooldown
+    if @exit_time
+      time_to_wait = (@exit_time + 3) - Time.now
+      if time_to_wait > 0
+        debug("Waiting #{time_to_wait} for cooldown of instance #{index}")
+        sleep(time_to_wait)
+      end
+    end
+  end
+
+  def exit_time_file
+    instance_work_dir + 'exit_time.tmp'
   end
 end
