@@ -85,7 +85,7 @@ $(CHROOT)/opt/apache-maven-$(MAVEN_VERSION)/bin/mvn: $(OUT)/apache-maven-$(MAVEN
 	touch $@ # Update timestamp for make
 
 $(OUT)/apache-maven-$(MAVEN_VERSION)-bin.tar.gz:
-	wget -O $@ http://www.nic.funet.fi/pub/mirrors/apache.org/maven/binaries/apache-maven-$(MAVEN_VERSION)-bin.tar.gz
+	wget -O $@ http://www.nic.funet.fi/pub/mirrors/apache.org/maven/maven-3/$(MAVEN_VERSION)/binaries/apache-maven-$(MAVEN_VERSION)-bin.tar.gz
 
 $(CHROOT)/opt/maven: $(CHROOT)/opt/apache-maven-$(MAVEN_VERSION)
 	rm -f $@
