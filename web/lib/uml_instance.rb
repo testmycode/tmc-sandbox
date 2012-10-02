@@ -58,7 +58,7 @@ class UmlInstance
         
         $stdin.reopen("/dev/null")
         if options[:vm_log]
-          $stdout.reopen(options[:vm_log])
+          redirect_via_timestamper($stdout, options[:vm_log])
         else
           $stdout.reopen("/dev/null")
         end
@@ -146,6 +146,40 @@ class UmlInstance
         @subprocess.wait
       end
       @subprocess = nil
+    end
+  end
+
+private
+  def redirect_via_timestamper(output_stream, dest)
+    pread, pwrite = IO.pipe
+    output_stream.reopen(pwrite)
+    dest = File.open(dest, 'w') unless dest.is_a?(IO)
+
+    begin
+      start_time = Time.now
+      pid = Process.fork do
+        begin
+          pwrite.close
+          $stdin.close
+          $stdout.reopen("/dev/null")
+          $stderr.reopen($stdout)
+          begin
+            loop do
+              line = pread.gets
+              break if line == nil
+              dest.printf("[%.6f] %s", Time.now - start_time, line)
+            end
+          ensure
+            dest.close
+          end
+          pread.close
+        ensure
+          exit!(0)
+        end
+      end
+    ensure
+      pread.close
+      Process.detach(pid)
     end
   end
 end
