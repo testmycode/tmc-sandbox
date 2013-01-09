@@ -15,7 +15,7 @@ Install the following prerequisites:
 
 If you're on a Debian derivative, you may need to install Debian's archive key:
 
-    curl -L http://ftp-master.debian.org/archive-key-6.0.asc | sudo apt-key add -
+    curl -L http://ftp-master.debian.org/archive-key-7.0.asc | sudo apt-key add -
 
 Now build with `sudo make`. Root access is needed by multistrap since it chroots.
 

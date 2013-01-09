@@ -8,17 +8,17 @@ aptsources=Debian Updates
 setupscript=./build-scripts/before-dpkg-setup.sh
 
 [Debian]
-packages=makedev locales build-essential g++ openjdk-6-jdk nano procps xvfb iproute net-tools iputils-ping curl wget rsync
+packages=makedev locales build-essential g++ openjdk-7-jdk nano procps xvfb iproute net-tools iputils-ping curl wget rsync
 source=http://ftp.fi.debian.org/debian
 keyring=debian-archive-keyring
-suite=squeeze
+suite=wheezy
 
 [Updates]
 packages=
 source=http://security.debian.org/
 keyring=debian-archive-keyring
-suite=squeeze/updates
+suite=wheezy/updates
 
 
-# Download http://ftp-master.debian.org/archive-key-6.0.asc and apt-key add it if on ubuntu or similar
+# Download http://ftp-master.debian.org/archive-key-7.0.asc and apt-key add it if on ubuntu or similar
 
