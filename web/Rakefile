@@ -38,11 +38,20 @@ namespace :init do
 
   desc "Install init scripts. RVM-compatible."
   task :install do
+
+    def rvm_info
+      @rvm_info ||= begin          
+        output = `rvm info 2>/dev/null` # We silence the "RVM is not a function" warning on stderr.
+        potential_warning = "You need to change your terminal emulator preferences to allow login shell.\nSometimes it is required to use `/bin/bash --login` as the command.\nPlease visit https://rvm.io/integration/gnome-terminal/ for a example."    
+        output = output.sub(potential_warning, '')
+        YAML::load(output)   
+      end    
+    end
+
     rvm_current = `rvm current`
     if $?.success?
       puts "Using RVM."
       rvm_current.strip!
-      rvm_info = YAML::load(`rvm info 2>/dev/null`) # Silenced rvm info complaint "RVM is not a function".
       ruby_path = rvm_info[rvm_current]['binaries']['ruby']
       env = rvm_info[rvm_current]['environment']
     else
