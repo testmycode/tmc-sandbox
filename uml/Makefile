@@ -25,7 +25,10 @@ dummy_create_output_dir := $(shell test -d $(OUT) || mkdir -p $(OUT))
 KERNEL_VERSION=3.4.1
 KERNEL_AUFS_BRANCH=aufs3.4
 MAVEN_VERSION=3.0.4
+JDK_VERSION=1.7.0_11
+JDK_PACKAGE_VERSION=7u11
 
+# Kernel
 kernel: $(OUT)/linux.uml
 
 $(OUT)/linux.uml: $(OUT)/linux-$(KERNEL_VERSION) $(OUT)/aufs3-standalone
@@ -54,12 +57,15 @@ $(OUT)/rootfs.squashfs: chroot
 	mksquashfs $(CHROOT) $@ -all-root -noappend -e var/cache/apt $(SQUASHFS_EXTRA_OPTS)
 	chmod a+r $@
 
-chroot: $(CHROOT)/var/log/dpkg.log $(CHROOT)/sbin/tmc-init $(CHROOT)/sbin/fast-shutdown maven
+
+CHROOT_BASE_TIUMESTAMP_FILE=$(CHROOT)/var/log/dpkg.log
+
+chroot: $(CHROOT_BASE_TIUMESTAMP_FILE) $(CHROOT)/sbin/tmc-init $(CHROOT)/sbin/fast-shutdown maven java
 
 $(OUT)/multistrap.conf: rootfs/multistrap.conf.in
 	sed 's/__ARCH__/$(ARCH)/' < $< > $@
 
-$(CHROOT)/var/log/dpkg.log: $(OUT)/multistrap.conf
+$(CHROOT_BASE_TIUMESTAMP_FILE): $(OUT)/multistrap.conf
 	mkdir -p $(CHROOT)
 	multistrap -f $(OUT)/multistrap.conf
 	echo "en_US.UTF-8 UTF-8" > $(CHROOT)/etc/locale.gen
@@ -73,12 +79,38 @@ $(CHROOT)/sbin/tmc-init: $(CHROOT)/var/log/dpkg.log rootfs/tmc-init
 $(CHROOT)/sbin/fast-shutdown: rootfs/fast-shutdown.c
 	gcc -Os -o $@ $<
 
+# Java
+ifeq ($(ARCH),i386)
+  JDK_ARCH=i586
+else
+  JDK_ARCH=x64
+endif
+JDK_PACKAGE_FILE=jdk-$(JDK_PACKAGE_VERSION)-linux-$(JDK_ARCH).tar.gz
+JDK_URL=http://testmycode.net/sandbox-jdk/$(JDK_PACKAGE_FILE)
+
+java: $(CHROOT)/opt/jdk $(CHROOT)/etc/profile.d/jdk.sh
+
+$(CHROOT)/opt/jdk: $(OUT)/$(JDK_PACKAGE_FILE)
+	rm -Rf $@
+	mkdir -p $(CHROOT)/opt
+	tar -C $(CHROOT)/opt -xvzf $<
+	cd $(CHROOT)/opt && ln -sf jdk$(JDK_VERSION) jdk
+	touch $@
+
+$(CHROOT)/etc/profile.d/jdk.sh: $(CHROOT_BASE_TIUMESTAMP_FILE)
+	mkdir -p $(CHROOT)/etc/profile.d
+	echo "export PATH=/opt/jdk/bin:\$$PATH" > $@
+
+$(OUT)/$(JDK_PACKAGE_FILE):
+	wget -O $@ $(JDK_URL)
+
 # Maven
 maven: $(CHROOT)/usr/local/bin/mvn $(CHROOT)/opt/maven $(CHROOT)/etc/maven-settings.template.xml
 
 $(CHROOT)/usr/local/bin/mvn: $(CHROOT)/opt/apache-maven-$(MAVEN_VERSION)/bin/mvn
 	rm -f $@
 	cd $(CHROOT)/usr/local/bin && ln -sf /opt/apache-maven-$(MAVEN_VERSION)/bin/mvn
+	touch $@
 
 $(CHROOT)/opt/apache-maven-$(MAVEN_VERSION)/bin/mvn: $(OUT)/apache-maven-$(MAVEN_VERSION)-bin.tar.gz
 	tar -C $(CHROOT)/opt -xvzf $<

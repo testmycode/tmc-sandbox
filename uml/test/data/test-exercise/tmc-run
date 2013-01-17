@@ -1,5 +1,8 @@
 #!/bin/sh
 # This is a very flawed runscript but it'll do for now.
+
+. /etc/profile
+
 mkdir -p classes/main
 mkdir -p classes/test
 javac -d classes/main -cp lib/*:src/ src/*.java
