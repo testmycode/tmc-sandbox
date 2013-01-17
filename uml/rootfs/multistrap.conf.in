@@ -3,22 +3,27 @@ arch=__ARCH__
 directory=./output/chroot
 cleanup=false  # We'll tell squashfs to exclude the downloaded packages
 unpack=true
-debootstrap=Debian Updates
-aptsources=Debian Updates
+debootstrap=Ubuntu Updates Security
+aptsources=Ubuntu Updates Security
 setupscript=./build-scripts/before-dpkg-setup.sh
 
-[Debian]
+[Ubuntu]
 packages=makedev locales build-essential g++ openjdk-7-jdk nano procps xvfb iproute net-tools iputils-ping curl wget rsync
-source=http://ftp.fi.debian.org/debian
-keyring=debian-archive-keyring
-suite=wheezy
+source=http://archive.ubuntu.com/ubuntu/
+keyring=ubuntu-keyring
+suite=precise
+components=main universe
 
 [Updates]
 packages=
-source=http://security.debian.org/
-keyring=debian-archive-keyring
-suite=wheezy/updates
+source=http://archive.ubuntu.com/ubuntu/
+keyring=ubuntu-keyring
+suite=precise-updates
+components=main universe
 
-
-# Download http://ftp-master.debian.org/archive-key-7.0.asc and apt-key add it if on ubuntu or similar
-
+[Security]
+packages=
+source=http://security.ubuntu.com/ubuntu
+keyring=ubuntu-keyring
+suite=precise-security
+components=main universe
