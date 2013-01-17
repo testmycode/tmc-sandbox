@@ -83,8 +83,8 @@ if `cat /proc/cmdline | grep -E -q 'eth0=tuntap'`; then
     echo "nameserver $GW_ADDR" > /etc/resolv.conf
     
     export http_proxy="http://$GW_ADDR:3128"
-    echo "http.proxyHost=$GW_ADDR" >> /etc/java-7-openjdk/net.properties
-    echo "http.proxyPort=3128" >> /etc/java-7-openjdk/net.properties
+    echo "http.proxyHost=$GW_ADDR" >> /etc/java-6-openjdk/net.properties
+    echo "http.proxyPort=3128" >> /etc/java-6-openjdk/net.properties
     cat /etc/maven-settings.template.xml | sed "s/__PROXY_IP__/$GW_ADDR/" > /opt/maven/conf/settings.xml
 fi
 

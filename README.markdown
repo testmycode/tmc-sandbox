@@ -1,7 +1,7 @@
 The TMC sandbox consists of the following:
 
 - A [User-Mode Linux](http://user-mode-linux.sourceforge.net/) kernel.
-- A minimal Linux root disk image with compilers and stuff. Currently based on Ubuntu 12.04 (LTS) using [Multistrap](http://wiki.debian.org/Multistrap) but something smaller might be nice.
+- A minimal Linux root disk image with compilers and stuff. Currently based on Debian 6 using [Multistrap](http://wiki.debian.org/Multistrap) but something smaller might be nice.
 - An initrd that layers a ramdisk on top of the read-only root disk (using [aufs](http://aufs.sourceforge.net/)).
 - An optional [rack](http://rack.rubyforge.org/) webservice.
 
@@ -12,6 +12,10 @@ Install the following prerequisites:
 - `build-essential`
 - `squashfs-tools`
 - `multistrap`
+
+If you're on a Debian derivative, you may need to install Debian's archive key:
+
+    curl -L http://ftp-master.debian.org/archive-key-6.0.asc | sudo apt-key add -
 
 Now build with `sudo make`. Root access is needed by multistrap since it chroots.
 
