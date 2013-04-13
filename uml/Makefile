@@ -131,7 +131,7 @@ ruby:
 	cd $(CHROOT)/root && wget ftp://ftp.ruby-lang.org/pub/ruby/2.0/ruby-2.0.0-p0.tar.bz2 -O ruby.tar.bz2 && tar vjxf ruby.tar.bz2
 
 	chroot $(CHROOT) sh -c "cd /root/ruby-2.0.0-p0 && ./configure --prefix=/usr && make && make install"
-
+	chroot $(CHROOT) sh -c "env HOME=/root/ gem install rspec json rails bundler --force"
 # Busybox
 BUSYBOX_VERSION=1.20.1
 BUSYBOX_INSTALL_DIR=$(OUT)/busybox-$(BUSYBOX_VERSION)/_install
