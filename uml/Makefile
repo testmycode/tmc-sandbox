@@ -60,7 +60,7 @@ $(OUT)/rootfs.squashfs: chroot
 
 CHROOT_BASE_TIUMESTAMP_FILE=$(CHROOT)/var/log/dpkg.log
 
-chroot: $(CHROOT_BASE_TIUMESTAMP_FILE) $(CHROOT)/sbin/tmc-init $(CHROOT)/sbin/fast-shutdown maven java
+chroot: $(CHROOT_BASE_TIUMESTAMP_FILE) $(CHROOT)/sbin/tmc-init $(CHROOT)/sbin/fast-shutdown maven java ruby
 
 $(OUT)/multistrap.conf: rootfs/multistrap.conf.in
 	sed 's/__ARCH__/$(ARCH)/' < $< > $@
@@ -124,6 +124,13 @@ $(CHROOT)/opt/maven: $(CHROOT)/opt/apache-maven-$(MAVEN_VERSION)
 
 $(CHROOT)/etc/maven-settings.template.xml: rootfs/maven-settings.template.xml
 	cp -f $< $@
+
+
+ruby:
+
+	cd $(CHROOT)/root && wget ftp://ftp.ruby-lang.org/pub/ruby/2.0/ruby-2.0.0-p0.tar.bz2 -O ruby.tar.bz2 && tar vjxf ruby.tar.bz2
+
+	chroot $(CHROOT) sh -c "cd /root/ruby-2.0.0-p0 && ./configure --prefix=/usr && make && make install"
 
 # Busybox
 BUSYBOX_VERSION=1.20.1
