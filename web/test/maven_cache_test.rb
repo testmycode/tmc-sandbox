@@ -15,7 +15,10 @@ class MavenCacheTest < MiniTest::Unit::TestCase
 
     AppLog.set(Logger.new(Paths.log_dir + 'test.log'))
 
-    @tmpdir = Dir.mktmpdir("maven_cache_test")
+    @tmpdir = Paths.work_dir + 'test_tmp' + 'maven_cache_test'
+    FileUtils.rm_rf(@tmpdir)
+    FileUtils.mkdir_p(@tmpdir)
+
     FileUtils.mkdir_p(maven_cache_work_dir)
 
     @test_settings = Settings.get.clone
