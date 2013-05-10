@@ -24,7 +24,7 @@ dummy_create_output_dir := $(shell test -d $(OUT) || mkdir -p $(OUT))
 # Version numbers
 KERNEL_VERSION=3.4.1
 KERNEL_AUFS_BRANCH=aufs3.4
-MAVEN_VERSION=3.0.4
+MAVEN_VERSION=3.0.5
 JDK_VERSION=1.7.0_11
 JDK_PACKAGE_VERSION=7u11
 
@@ -58,14 +58,14 @@ $(OUT)/rootfs.squashfs: chroot
 	chmod a+r $@
 
 
-CHROOT_BASE_TIUMESTAMP_FILE=$(CHROOT)/var/log/dpkg.log
+CHROOT_BASE_TIMESTAMP_FILE=$(CHROOT)/var/log/dpkg.log
 
-chroot: $(CHROOT_BASE_TIUMESTAMP_FILE) $(CHROOT)/sbin/tmc-init $(CHROOT)/sbin/fast-shutdown maven java
+chroot: $(CHROOT_BASE_TIMESTAMP_FILE) $(CHROOT)/sbin/tmc-init $(CHROOT)/sbin/fast-shutdown maven java
 
 $(OUT)/multistrap.conf: rootfs/multistrap.conf.in
 	sed 's/__ARCH__/$(ARCH)/' < $< > $@
 
-$(CHROOT_BASE_TIUMESTAMP_FILE): $(OUT)/multistrap.conf
+$(CHROOT_BASE_TIMESTAMP_FILE): $(OUT)/multistrap.conf
 	mkdir -p $(CHROOT)
 	multistrap -f $(OUT)/multistrap.conf
 	echo "en_US.UTF-8 UTF-8" > $(CHROOT)/etc/locale.gen
@@ -97,9 +97,10 @@ $(CHROOT)/opt/jdk: $(OUT)/$(JDK_PACKAGE_FILE)
 	cd $(CHROOT)/opt && ln -sf jdk$(JDK_VERSION) jdk
 	touch $@
 
-$(CHROOT)/etc/profile.d/jdk.sh: $(CHROOT_BASE_TIUMESTAMP_FILE)
+$(CHROOT)/etc/profile.d/jdk.sh: $(CHROOT_BASE_TIMESTAMP_FILE)
 	mkdir -p $(CHROOT)/etc/profile.d
-	echo "export PATH=/opt/jdk/bin:\$$PATH" > $@
+	echo "export JAVA_HOME=/opt/jdk" > $@
+	echo "export PATH=\$$JAVA_HOME/bin:\$$PATH" >> $@
 
 $(OUT)/$(JDK_PACKAGE_FILE):
 	wget -O $@ $(JDK_URL)
