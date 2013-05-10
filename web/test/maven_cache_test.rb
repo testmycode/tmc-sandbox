@@ -54,7 +54,6 @@ class MavenCacheTest < MiniTest::Unit::TestCase
 
       teardown_network
 
-      FileUtils.rm_rf(@tmpdir)
       AppLog.debug "----- TEST FINISHED -----"
     end
   end
@@ -74,7 +73,7 @@ class MavenCacheTest < MiniTest::Unit::TestCase
     
     @mc.wait_for_daemon
 
-    check_dep_exists_in_both_images("org/apache/commons/commons-io/1.3.2")
+    check_dep_exists_in_both_images("commons-io/commons-io/1.3.2")
   end
   
   def test_maven_cache_two_tasks
@@ -92,7 +91,7 @@ class MavenCacheTest < MiniTest::Unit::TestCase
     
     @mc.wait_for_daemon
 
-    check_dep_exists_in_both_images("org/apache/commons/commons-io/1.3.2")
+    check_dep_exists_in_both_images("commons-io/commons-io/1.3.2")
     check_dep_exists_in_both_images("com/google/code/gson/gson/2.2.1")
   end
 
@@ -114,7 +113,7 @@ class MavenCacheTest < MiniTest::Unit::TestCase
 
     @mc.wait_for_daemon
 
-    check_dep_exists_in_both_images("org/apache/commons/commons-io/1.3.2")
+    check_dep_exists_in_both_images("commons-io/commons-io/1.3.2")
   end
 
   def test_same_task_twice_quickly
@@ -129,7 +128,7 @@ class MavenCacheTest < MiniTest::Unit::TestCase
     # We just check that is basically works
     @mc.wait_for_daemon
 
-    check_dep_exists_in_both_images("org/apache/commons/commons-io/1.3.2")
+    check_dep_exists_in_both_images("commons-io/commons-io/1.3.2")
   end
   
 private

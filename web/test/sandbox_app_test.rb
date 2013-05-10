@@ -188,7 +188,7 @@ class SandboxAppTest < MiniTest::Unit::TestCase
         post_with_notify '/tasks.json', :file => tar_fixture('show_mvn_cache'), :token => '456'
         assert_equal 'finished', @notify_params['status']
         assert_equal '0', @notify_params['exit_code']
-        assert @notify_params['test_output'].include?("/ubdd/maven/repository/org/apache/commons/commons-io/1.3.2")
+        assert @notify_params['test_output'].include?("/ubdd/maven/repository/commons-io/commons-io/1.3.2")
       end
     end
   end
