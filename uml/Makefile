@@ -27,6 +27,7 @@ KERNEL_AUFS_BRANCH=aufs3.4
 MAVEN_VERSION=3.0.5
 JDK_VERSION=1.7.0_11
 JDK_PACKAGE_VERSION=7u11
+RUBY_VERSION=2.0.0-p195
 
 # Kernel
 kernel: $(OUT)/linux.uml
@@ -126,13 +127,32 @@ $(CHROOT)/opt/maven: $(CHROOT)/opt/apache-maven-$(MAVEN_VERSION)
 $(CHROOT)/etc/maven-settings.template.xml: rootfs/maven-settings.template.xml
 	cp -f $< $@
 
+# Ruby
+ruby: rubygems
 
-ruby:
+RUBYGEMS_TIMESTAMP_FILE=$(CHROOT)/usr/lib/ruby/.gems_installed
 
-	cd $(CHROOT)/root && wget ftp://ftp.ruby-lang.org/pub/ruby/2.0/ruby-2.0.0-p0.tar.bz2 -O ruby.tar.bz2 && tar vjxf ruby.tar.bz2
+rubygems: $(RUBYGEMS_TIMESTAMP_FILE)
 
-	chroot $(CHROOT) sh -c "cd /root/ruby-2.0.0-p0 && ./configure --prefix=/usr && make && make install"
-	chroot $(CHROOT) sh -c "env HOME=/root/ gem install rspec json rails bundler --force"
+$(RUBYGEMS_TIMESTAMP_FILE): $(CHROOT)/usr/bin/ruby
+	# FIXME: don't do these every time
+	cp -f /etc/resolv.conf $(CHROOT)/etc/resolv.conf
+	chroot $(CHROOT) sh -c "env HOME=/root gem update --system --force"
+	chroot $(CHROOT) sh -c "env HOME=/root gem install rspec json rails bundler --force --no-ri --no-rdoc"
+	rm -Rf $(CHROOT)/usr/lib/ruby/gems/*/cache
+	rm -f $(CHROOT)/etc/resolv.conf  # tmc-init will create one in the real sandbox
+	touch $(RUBYGEMS_TIMESTAMP_FILE)
+	
+
+$(CHROOT)/usr/bin/ruby: $(OUT)/ruby-$(RUBY_VERSION).tar.bz2 $(CHROOT_BASE_TIMESTAMP_FILE)
+	rm -Rf $(CHROOT)/root/ruby-$(RUBY_VERSION)
+	tar -C $(CHROOT)/root -xvjf $<
+	chroot $(CHROOT) sh -c "cd /root/ruby-$(RUBY_VERSION) && ./configure --disable-install-doc --prefix=/usr && make && make install"
+	rm -Rf $(CHROOT)/root/ruby-$(RUBY_VERSION)
+
+$(OUT)/ruby-$(RUBY_VERSION).tar.bz2:
+	wget -O $@ ftp://ftp.ruby-lang.org/pub/ruby/2.0/ruby-$(RUBY_VERSION).tar.bz2
+
 # Busybox
 BUSYBOX_VERSION=1.20.1
 BUSYBOX_INSTALL_DIR=$(OUT)/busybox-$(BUSYBOX_VERSION)/_install
