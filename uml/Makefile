@@ -1,10 +1,10 @@
 
 # Let's not allow parallel operation if for no other reason than to avoid mangled output
-# Set SUBMAKE_JOBS to pass -jN to submakes. Defaults to 3.
+# Set SUBMAKE_JOBS to pass -jN to submakes.
 .NOTPARALLEL:
 
 ifeq ($(SUBMAKE_JOBS),)
-  SUBMAKE_JOBS=3
+  SUBMAKE_JOBS=6
 endif
 
 ifneq ("$(shell id -nu)","root")
