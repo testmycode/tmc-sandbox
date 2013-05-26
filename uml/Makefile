@@ -135,10 +135,9 @@ RUBYGEMS_TIMESTAMP_FILE=$(CHROOT)/usr/lib/ruby/.gems_installed
 rubygems: $(RUBYGEMS_TIMESTAMP_FILE)
 
 $(RUBYGEMS_TIMESTAMP_FILE): $(CHROOT)/usr/bin/ruby
-	# FIXME: don't do these every time
 	cp -f /etc/resolv.conf $(CHROOT)/etc/resolv.conf
 	chroot $(CHROOT) sh -c "env HOME=/root gem update --system --force"
-	chroot $(CHROOT) sh -c "env HOME=/root gem install rspec json rails bundler --force --no-ri --no-rdoc"
+	chroot $(CHROOT) sh -c "env HOME=/root gem install rspec bundler --force --no-ri --no-rdoc"
 	rm -Rf $(CHROOT)/usr/lib/ruby/gems/*/cache
 	rm -f $(CHROOT)/etc/resolv.conf  # tmc-init will create one in the real sandbox
 	touch $(RUBYGEMS_TIMESTAMP_FILE)
@@ -147,7 +146,7 @@ $(RUBYGEMS_TIMESTAMP_FILE): $(CHROOT)/usr/bin/ruby
 $(CHROOT)/usr/bin/ruby: $(OUT)/ruby-$(RUBY_VERSION).tar.bz2 $(CHROOT_BASE_TIMESTAMP_FILE)
 	rm -Rf $(CHROOT)/root/ruby-$(RUBY_VERSION)
 	tar -C $(CHROOT)/root -xvjf $<
-	chroot $(CHROOT) sh -c "cd /root/ruby-$(RUBY_VERSION) && ./configure --disable-install-doc --prefix=/usr && make && make install"
+	chroot $(CHROOT) sh -c "cd /root/ruby-$(RUBY_VERSION) && ./configure --disable-install-doc --prefix=/usr && make -j$(SUBMAKE_JOBS) && make install"
 	rm -Rf $(CHROOT)/root/ruby-$(RUBY_VERSION)
 
 $(OUT)/ruby-$(RUBY_VERSION).tar.bz2:
