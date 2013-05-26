@@ -61,7 +61,7 @@ $(OUT)/rootfs.squashfs: chroot
 
 CHROOT_BASE_TIMESTAMP_FILE=$(CHROOT)/var/log/dpkg.log
 
-chroot: $(CHROOT_BASE_TIMESTAMP_FILE) $(CHROOT)/sbin/tmc-init $(CHROOT)/sbin/fast-shutdown maven java ruby
+chroot: $(CHROOT_BASE_TIMESTAMP_FILE) $(CHROOT)/sbin/tmc-init $(CHROOT)/sbin/fast-shutdown java maven ruby tmc-check
 
 $(OUT)/multistrap.conf: rootfs/multistrap.conf.in
 	sed 's/__ARCH__/$(ARCH)/' < $< > $@
@@ -152,6 +152,19 @@ $(CHROOT)/usr/bin/ruby: $(OUT)/ruby-$(RUBY_VERSION).tar.bz2 $(CHROOT_BASE_TIMEST
 $(OUT)/ruby-$(RUBY_VERSION).tar.bz2:
 	wget -O $@ ftp://ftp.ruby-lang.org/pub/ruby/2.0/ruby-$(RUBY_VERSION).tar.bz2
 
+# TMC Check
+tmc-check: $(CHROOT)/usr/lib/pkgconfig/tmccheck.pc
+
+$(CHROOT)/usr/lib/pkgconfig/tmccheck.pc: $(OUT)/tmc-check $(CHROOT_BASE_TIMESTAMP_FILE)
+	rm -Rf $(CHROOT)/root/tmc-check
+	cp -r $(OUT)/tmc-check $(CHROOT)/root/tmc-check
+	chroot $(CHROOT) sh -c "cd /root/tmc-check && make && make install PREFIX=/usr"
+	rm -Rf $(CHROOT)/root/tmc-check
+
+$(OUT)/tmc-check:
+	cd $(OUT) && git clone https://github.com/testmycode/tmc-check.git
+
+
 # Busybox
 BUSYBOX_VERSION=1.20.1
 BUSYBOX_INSTALL_DIR=$(OUT)/busybox-$(BUSYBOX_VERSION)/_install
@@ -183,7 +196,7 @@ $(OUT)/initrd/init: chroot busybox
 	chmod +x $(OUT)/initrd/init
 
 # Cleanup
-clean: clean-kernel clean-rootfs clean-busybox clean-initrd
+clean: clean-kernel clean-ruby clean-tmc-check clean-rootfs clean-busybox clean-initrd
 	
 
 distclean:
@@ -203,6 +216,16 @@ clean-rootfs:
 
 distclean-rootfs: clean-rootfs
 	rm -f $(OUT)/rootfs.squashfs
+
+clean-ruby:
+	rm -f $(OUT)/ruby-$(RUBY_VERSION).tar.bz2
+
+distclean-ruby: clean-ruby
+
+clean-tmc-check:
+	rm -Rf $(OUT)/tmc-check
+
+distclean-tmc-check: clean-tmc-check
 
 clean-busybox:
 	rm -Rf $(OUT)/busybox-$(BUSYBOX_VERSION)
