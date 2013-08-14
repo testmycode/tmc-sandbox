@@ -158,7 +158,9 @@ tmc-check: $(CHROOT)/usr/lib/pkgconfig/tmccheck.pc
 $(CHROOT)/usr/lib/pkgconfig/tmccheck.pc: $(OUT)/tmc-check $(CHROOT_BASE_TIMESTAMP_FILE)
 	rm -Rf $(CHROOT)/root/tmc-check
 	cp -r $(OUT)/tmc-check $(CHROOT)/root/tmc-check
+	cp -f /etc/resolv.conf $(CHROOT)/etc/resolv.conf  # For bundle install to work
 	chroot $(CHROOT) sh -c "cd /root/tmc-check && make && make install PREFIX=/usr"
+	rm -f $(CHROOT)/etc/resolv.conf  # tmc-init will create one in the real sandbox
 	rm -Rf $(CHROOT)/root/tmc-check
 
 $(OUT)/tmc-check:
