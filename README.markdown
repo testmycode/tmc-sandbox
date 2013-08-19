@@ -55,7 +55,7 @@ to the notify URL with the following JSON object:
     - 'failed' in any other case
 - **exit_code**: the exit code of `tmc-run`, or null if not applicable
 - **token**: the token given in the request
-- **test_output**: the test_output.txt created by the task. May be empty.
+- **test_output**: the `test_output.txt` created by the task. May be empty.
 - **stdout**: the stdout.txt created by the task. May be empty.
 - **stderr**: the stderr.txt created by the task. May be empty.
 
@@ -85,6 +85,8 @@ The web service can be configured to provide very limited network access to the 
 It uses a TAP device, dnsmasq and squid to give access via a HTTP proxy only.
 The required software is included and started/stopped automatically.
 Tap devices are also created and configured on demand and destroyed on exit.
+
+On Ubuntu, you may need to comment out the line `dns=dnsmasq` from `/etc/NetworkManager/NetworkManager.conf` to avoid a conflict with the system's own dnsmasq.`
 
 ### Maven support ###
 
