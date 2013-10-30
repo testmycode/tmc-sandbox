@@ -23,12 +23,12 @@ You can test the sandbox with `./run-test-exercise.sh` or `./run-bash.sh` under 
 
 ## Options ##
 
-The sandbox is invoked by starting `uml/linux.uml` with at least the following kernel parameters:
+The sandbox is invoked by starting `uml/output/linux.uml` with at least the following kernel parameters:
 
 - `initrd=initrd.img` - the initrd.
 - `ubdarc=rootfs.squashfs` - the rootfs (the `rc` meaning read-only shared).
 - `ubdbr=runnable.tar` - an uncompressed tar file containing an executable `tmc-run`.
-- `ubdc=output.tar` - a zeroed file with a reasonable amount of space for the output. `output.txt` will be written there as a tar-file.
+- `ubdc=output.tar` - a zeroed file with a reasonable amount of space for the output. `test_output.txt`, `exit_code.txt`, `stdout.txt` and `stderr.txt` will be written there as a tar-file.
 - `mem=xyzM` - the memory limit.
 
 The normal boot process is skipped. The initrd invokes a custom init script that prepares a very minimal environment, calls `tmc-run`, flushes output and halts the virtual machine.
