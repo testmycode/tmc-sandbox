@@ -22,8 +22,8 @@ CHROOT=$(OUT)/chroot
 dummy_create_output_dir := $(shell test -d $(OUT) || mkdir -p $(OUT))
 
 # Version numbers
-KERNEL_VERSION=3.4.1
-KERNEL_AUFS_BRANCH=aufs3.4
+KERNEL_VERSION=3.11.6
+KERNEL_AUFS_BRANCH=aufs3.11
 MAVEN_VERSION=3.0.5
 JDK_VERSION=1.7.0_11
 JDK_PACKAGE_VERSION=7u11
@@ -36,12 +36,12 @@ $(OUT)/linux.uml: $(OUT)/linux-$(KERNEL_VERSION) $(OUT)/aufs3-standalone
 	build-scripts/compile-kernel.sh $(OUT)/linux-$(KERNEL_VERSION) $(SUBMAKE_JOBS)
 	cp -f $(OUT)/linux-$(KERNEL_VERSION)/linux $@
 
-$(OUT)/linux-$(KERNEL_VERSION): $(OUT)/linux-$(KERNEL_VERSION).tar.bz2
-	tar -C $(OUT) -xvjf $(OUT)/linux-$(KERNEL_VERSION).tar.bz2
+$(OUT)/linux-$(KERNEL_VERSION): $(OUT)/linux-$(KERNEL_VERSION).tar.xz
+	tar -C $(OUT) -xvJf $(OUT)/linux-$(KERNEL_VERSION).tar.xz
 	cp kernel/kernel-config.amd64 $(OUT)/linux-$(KERNEL_VERSION)/.config
 
-$(OUT)/linux-$(KERNEL_VERSION).tar.bz2:
-	wget -O $@ http://www.kernel.org/pub/linux/kernel/v3.0/linux-$(KERNEL_VERSION).tar.bz2
+$(OUT)/linux-$(KERNEL_VERSION).tar.xz:
+	wget -O $@ http://www.kernel.org/pub/linux/kernel/v3.0/linux-$(KERNEL_VERSION).tar.xz
 
 $(OUT)/aufs3-standalone:
 	git clone -b $(KERNEL_AUFS_BRANCH) git://aufs.git.sourceforge.net/gitroot/aufs/aufs3-standalone.git $(OUT)/aufs3-standalone
