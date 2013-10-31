@@ -24,6 +24,7 @@ dummy_create_output_dir := $(shell test -d $(OUT) || mkdir -p $(OUT))
 # Version numbers
 KERNEL_VERSION=3.11.6
 KERNEL_AUFS_BRANCH=aufs3.11
+BUSYBOX_VERSION=1.21.1
 MAVEN_VERSION=3.0.5
 JDK_VERSION=1.7.0_11
 JDK_PACKAGE_VERSION=7u11
@@ -168,7 +169,6 @@ $(OUT)/tmc-check:
 
 
 # Busybox
-BUSYBOX_VERSION=1.20.1
 BUSYBOX_INSTALL_DIR=$(OUT)/busybox-$(BUSYBOX_VERSION)/_install
 busybox: $(BUSYBOX_INSTALL_DIR)/bin/busybox
 
