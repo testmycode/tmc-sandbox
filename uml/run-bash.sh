@@ -42,10 +42,6 @@ if [ "$1" = '-n' ]; then
   
   echo "Configuring squid"
   cat > "$SQUID_CONF" <<EOS
-acl manager proto cache_object
-acl localhost src 127.0.0.1/32 ::1
-acl to_localhost dst 127.0.0.0/8 0.0.0.0/32 ::1
-
 acl SSL_ports port 443
 acl Safe_ports port 80          # http
 acl Safe_ports port 8080  # alternative http

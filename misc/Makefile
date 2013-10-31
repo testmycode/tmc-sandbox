@@ -20,6 +20,8 @@ DNSMASQ_DIR=$(WORK)/dnsmasq-$(DNSMASQ_VERSION)
 SQUID_DIR=$(WORK)/squid-$(SQUID_VERSION)
 
 SQUIDROOT=$(shell readlink -f .)/squidroot
+SQUID_VAR_OWNER=$(shell stat -c '%u' .)
+SQUID_VAR_GROUP=$(shell stat -c '%g' .)
 
 all: dnsmasq squid
 
@@ -41,6 +43,8 @@ squid: $(SQUIDROOT)/sbin/squid
 
 $(SQUIDROOT)/sbin/squid: $(SQUID_DIR)/src/squid
 	make -C $(SQUID_DIR) install
+	chown -R $(SQUID_VAR_OWNER) $(SQUIDROOT)/var
+	chgrp -R $(SQUID_VAR_GROUP) $(SQUIDROOT)/var
 
 $(SQUID_DIR)/src/squid: $(SQUID_DIR)/Makefile
 	make -C $(SQUID_DIR) -j$(SUBMAKE_JOBS)
