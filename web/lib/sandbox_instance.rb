@@ -53,6 +53,7 @@ class SandboxInstance
         'test_output' => try_extract_file_from_tar(output_tar_path, 'test_output.txt'),
         'stdout' => try_extract_file_from_tar(output_tar_path, 'stdout.txt'),
         'stderr' => try_extract_file_from_tar(output_tar_path, 'stderr.txt'),
+        'valgrind' => try_extract_file_from_tar(output_tar_path, 'valgrind.log'),
         'vm_log' => File.read(vm_log_path)
       }
 
