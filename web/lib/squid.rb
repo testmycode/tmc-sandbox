@@ -95,11 +95,7 @@ http_access deny all
 
 http_port 3128
 
-cache_dir ufs #{Paths.squidroot_dir}/var/cache 100 16 256
-
-coredump_dir #{Paths.squidroot_dir}/var/cache
-
-refresh_pattern -i (/cgi-bin/|\?) 0	0%	0
+refresh_pattern -i (/cgi-bin/|\\?) 0	0%	0
 refresh_pattern .		0	20%	4320
 
 cache_effective_user #{Settings.tmc_user}
