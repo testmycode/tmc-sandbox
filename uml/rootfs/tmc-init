@@ -131,7 +131,7 @@ else
   summarize_text_file stdout.txt
   summarize_text_file stderr.txt
 
-  tar c test_output.txt exit_code.txt stdout.txt stderr.txt > $OUTPUT_FILE
+  tar c test_output.txt exit_code.txt stdout.txt stderr.txt valgrind.log > $OUTPUT_FILE
 fi
 
 # Shut down
