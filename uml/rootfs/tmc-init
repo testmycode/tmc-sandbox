@@ -8,7 +8,7 @@ export LANG="en_US.UTF-8"
 . /etc/profile
 
 summarize_text_file() {
-  [ -e $1 ] || touch $1
+  touch $1
   LINES=`cat $1 | wc -l`
   if [ $LINES -gt 1000 ]; then
     head -n 500 $1 > "$1.head"
@@ -125,11 +125,12 @@ else
   ( set +e; su tmc -c ./tmc-run; echo -n $? > exit_code.txt; true )
   EXIT_CODE=`cat exit_code.txt`
   echo "Completed tmc-run. Exit code: $EXIT_CODE"
-  
+
   # Write the result
-  [ -e test_output.txt ] || touch test_output.txt
+  touch test_output.txt
   summarize_text_file stdout.txt
   summarize_text_file stderr.txt
+  touch valgrind.log
 
   tar c test_output.txt exit_code.txt stdout.txt stderr.txt valgrind.log > $OUTPUT_FILE
 fi
