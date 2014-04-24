@@ -105,4 +105,4 @@ The cache may also be populated by a pom.xml file upload to `/maven_cache/popula
 
 The technical details are documented in `web/plugins/maven_cache.rb`.
 
-The cache must be explicitly enabmed in `site.yml`.
+The cache must be explicitly enabled in `site.yml`.
