@@ -131,6 +131,7 @@ else
   summarize_text_file stdout.txt
   summarize_text_file stderr.txt
   touch valgrind.log
+  touch validations.json
 
   tar c test_output.txt exit_code.txt stdout.txt stderr.txt valgrind.log validations.json > $OUTPUT_FILE
 fi
