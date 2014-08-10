@@ -204,7 +204,7 @@ private
   end
 
   def dnsmasq_enabled?
-    @settings['network']['squid']
+    @settings['network']['dnsmasq']
   end
 
   def maven_cache_enabled?
