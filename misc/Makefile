@@ -36,7 +36,7 @@ $(DNSMASQ_DIR)/Makefile: $(DNSMASQ_DIR).tar.gz
 	touch $@
 
 $(DNSMASQ_DIR).tar.gz:
-	wget -c $(DNSMASQ_URL) -O $@
+	wget $(DNSMASQ_URL) -O $@ || (rm -f $@ && exit 1)
 
 
 squid: $(SQUIDROOT)/sbin/squid
@@ -57,7 +57,7 @@ $(SQUID_DIR)/configure: $(SQUID_DIR).tar.gz
 	touch $@
 
 $(SQUID_DIR).tar.gz:
-	wget -c $(SQUID_URL) -O $@
+	wget $(SQUID_URL) -O $@ || (rm -f $@ && exit 1)
 
 clean:
 	rm -Rf $(WORK)

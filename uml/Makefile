@@ -42,7 +42,7 @@ $(OUT)/linux-$(KERNEL_VERSION): $(OUT)/linux-$(KERNEL_VERSION).tar.xz
 	cp kernel/kernel-config.amd64 $(OUT)/linux-$(KERNEL_VERSION)/.config
 
 $(OUT)/linux-$(KERNEL_VERSION).tar.xz:
-	wget -O $@ http://www.kernel.org/pub/linux/kernel/v3.0/linux-$(KERNEL_VERSION).tar.xz
+	wget -O $@ http://www.kernel.org/pub/linux/kernel/v3.0/linux-$(KERNEL_VERSION).tar.xz || (rm -f $@ && exit 1)
 
 $(OUT)/aufs3-standalone:
 	git clone -b $(KERNEL_AUFS_BRANCH) git://aufs.git.sourceforge.net/gitroot/aufs/aufs3-standalone.git $(OUT)/aufs3-standalone
@@ -105,7 +105,7 @@ $(CHROOT)/etc/profile.d/jdk.sh: $(CHROOT_BASE_TIMESTAMP_FILE)
 	echo "export PATH=\$$JAVA_HOME/bin:\$$PATH" >> $@
 
 $(OUT)/$(JDK_PACKAGE_FILE):
-	wget -O $@ $(JDK_URL)
+	wget -O $@ $(JDK_URL) || (rm -f $@ && exit 1)
 
 # Maven
 maven: $(CHROOT)/usr/local/bin/mvn $(CHROOT)/opt/maven $(CHROOT)/etc/maven-settings.template.xml
@@ -119,7 +119,7 @@ $(CHROOT)/opt/apache-maven-$(MAVEN_VERSION)/bin/mvn: $(OUT)/apache-maven-$(MAVEN
 	touch $@ # Update timestamp for make
 
 $(OUT)/apache-maven-$(MAVEN_VERSION)-bin.tar.gz:
-	wget -O $@ http://www.nic.funet.fi/pub/mirrors/apache.org/maven/maven-3/$(MAVEN_VERSION)/binaries/apache-maven-$(MAVEN_VERSION)-bin.tar.gz
+	wget -O $@ http://www.nic.funet.fi/pub/mirrors/apache.org/maven/maven-3/$(MAVEN_VERSION)/binaries/apache-maven-$(MAVEN_VERSION)-bin.tar.gz || (rm -f $@ && exit 1)
 
 $(CHROOT)/opt/maven: $(CHROOT)/opt/apache-maven-$(MAVEN_VERSION)
 	rm -f $@
@@ -151,7 +151,7 @@ $(CHROOT)/usr/bin/ruby: $(OUT)/ruby-$(RUBY_VERSION).tar.bz2 $(CHROOT_BASE_TIMEST
 	rm -Rf $(CHROOT)/root/ruby-$(RUBY_VERSION)
 
 $(OUT)/ruby-$(RUBY_VERSION).tar.bz2:
-	wget -O $@ ftp://ftp.ruby-lang.org/pub/ruby/2.0/ruby-$(RUBY_VERSION).tar.bz2
+	wget -O $@ ftp://ftp.ruby-lang.org/pub/ruby/2.0/ruby-$(RUBY_VERSION).tar.bz2 || (rm -f $@ && exit 1)
 
 # TMC Check
 tmc-check: $(CHROOT)/usr/lib/pkgconfig/tmccheck.pc
@@ -181,7 +181,7 @@ $(OUT)/busybox-$(BUSYBOX_VERSION): $(OUT)/busybox-$(BUSYBOX_VERSION).tar.bz2
 	tar -C $(OUT) -xvjf $(OUT)/busybox-$(BUSYBOX_VERSION).tar.bz2
 
 $(OUT)/busybox-$(BUSYBOX_VERSION).tar.bz2:
-	wget -O $@ http://busybox.net/downloads/busybox-$(BUSYBOX_VERSION).tar.bz2
+	wget -O $@ http://busybox.net/downloads/busybox-$(BUSYBOX_VERSION).tar.bz2 || (rm -f $@ && exit 1)
 
 # Initrd
 initrd: $(OUT)/initrd.img
