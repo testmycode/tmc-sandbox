@@ -45,7 +45,7 @@ $(OUT)/linux-$(KERNEL_VERSION).tar.xz:
 	wget -O $@ http://www.kernel.org/pub/linux/kernel/v3.0/linux-$(KERNEL_VERSION).tar.xz || (rm -f $@ && exit 1)
 
 $(OUT)/aufs3-standalone:
-	git clone -b $(KERNEL_AUFS_BRANCH) git://aufs.git.sourceforge.net/gitroot/aufs/aufs3-standalone.git $(OUT)/aufs3-standalone
+	git clone -b $(KERNEL_AUFS_BRANCH) git://git.code.sf.net/p/aufs/aufs3-standalone $(OUT)/aufs3-standalone
 
 
 # Chroot and rootfs
