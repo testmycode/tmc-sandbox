@@ -571,11 +571,11 @@ private
             end
           end
         else
-          task_options = ActiveSupport::JSON.decode(File.read(@current_task_json_path), :symbolize_keys => true)
-          if task_options[:never_skip] || !can_skip?(@current_task_path)
+          task_options = ActiveSupport::JSON.decode(File.read(@current_task_json_path))
+          if task_options['never_skip'] || !can_skip?(@current_task_path)
 
             AppLog.debug "Downloading Maven dependencies into #{imgpair.backimg.path}"
-            if download_deps(@current_task_path, imgpair.backimg.path, task_options[:run_tests])
+            if download_deps(@current_task_path, imgpair.backimg.path, task_options['run_tests'])
               AppLog.debug "Dependencies downloaded successfully"
               mark_pom_file_processed_in_cache(@current_task_path)
             else
