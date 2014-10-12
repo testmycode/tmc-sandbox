@@ -7,7 +7,7 @@ require 'uml_instance'
 require 'tap_device'
 
 class SandboxInstance
-  attr_reader :index
+  attr_reader :index  # 0-based
 
   def initialize(index, settings, plugin_manager)
     @index = index

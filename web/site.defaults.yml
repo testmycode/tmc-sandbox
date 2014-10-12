@@ -33,7 +33,7 @@ network:
 #
 # The amount of RAM for each user-mode linux instance.
 # About 20M of this is used by the virtualized environment.
-# Program output must also fit here.
+# The uncompressed exercise and program output must also fit here.
 #
 instance_ram: 256M
 
@@ -64,5 +64,7 @@ plugins:
     tap_device: tap_mvncache
     tap_ip: 192.168.210.1
     # How long to permit one download task to last, in seconds.
-    download_timeout: 300 # 5 minutes
-
+    download_timeout: 300  # 5 minutes
+  scratch_space:
+    enabled: false
+    img_size: 1G  # one created for each potential instance (see max_instances setting)
