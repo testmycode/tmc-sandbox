@@ -41,6 +41,7 @@ class SandboxApp
     #
     # Should return a hash like 'ubdd[rc]' => '/path/to/image' of
     # images to give to the VM. Read-only images will get a shared flock.
+    # This method is called just before `before_exec`.
     # options:
     #   :instance => SandboxInstance object
     #

@@ -28,6 +28,7 @@ summarize_text_file() {
 [ -e /dev/ubdc ] || mknod /dev/ubdc b 98 32   # Output tar file
 [ -e /dev/ubdd ] || mknod /dev/ubdd b 98 48   # Special purpose read-only file
 [ -e /dev/ubde ] || mknod /dev/ubde b 98 64   # Special purpose read-write file
+[ -e /dev/ubdf ] || mknod /dev/ubdf b 98 80   # Optional write branch for ubdd
 
 # Mount /proc and /sys
 mount -t proc proc /proc
@@ -43,10 +44,21 @@ if `cat /proc/cmdline | grep -E -q ubdd[rc]?[rc]?=`; then
   if `cat /proc/cmdline | grep -E -q nomount_ubdd`; then
     echo "Skipping mounting /ubdd"
   else
-    echo "Mounting /ubdd as read-only with writable ramdisk"
-    mkdir -p /mnt/ubdd_ro /mnt/ubdd_rw /ubdd
+    mkdir -p /mnt/ubdd_ro
     mount -o ro /dev/ubdd /mnt/ubdd_ro
-    mount -t tmpfs -o rw,size=64M none /mnt/ubdd_rw # This is necessary since aufs can't use another aufs as a write branch
+
+    # aufs can't use another aufs as a write branch so we must make a separate
+    # ubdd_rw directory for the write branch.
+    mkdir -p /mnt/ubdd_rw
+    if `cat /proc/cmdline | grep -E -q ubdfc?=`; then
+      echo "Mounting /ubdd as read-only with ubdf as write branch"
+      mount -o rw /dev/ubdf /mnt/ubdd_rw
+    else
+      echo "Mounting /ubdd as read-only with writable ramdisk"
+      mount -t tmpfs -o rw,size=64M none /mnt/ubdd_rw
+    fi
+
+    mkdir -p /ubdd
     mount -t aufs -o rw,br=/mnt/ubdd_rw:/mnt/ubdd_ro aufs /ubdd
   fi
 fi
