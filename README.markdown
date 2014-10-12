@@ -33,6 +33,8 @@ The sandbox is invoked by starting `uml/output/linux.uml` with at least the foll
 
 The normal boot process is skipped. The initrd invokes a custom init script that prepares a very minimal environment, calls `tmc-run`, flushes output and halts the virtual machine.
 
+Note: the RAM given to the sandbox is mmap'ed from `/run/shm`, a tmpfs that defaults to half of your actual RAM. Make sure your `/run/shm` has enough for all the sandboxes you are running, or the sandboxes may suffer kernel panics as they try to allocate memory they think they have available.
+
 ## Webservice ##
 
 There's a simple Rack webservice under `web/`.
