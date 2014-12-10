@@ -24,6 +24,7 @@ dummy_create_output_dir := $(shell test -d $(OUT) || mkdir -p $(OUT))
 # Version numbers
 KERNEL_VERSION=3.11.10
 KERNEL_AUFS_BRANCH=aufs3.11
+KERNEL_AUFS_COMMIT=4fb486c3f5a38058bccb14a4c8999ff403ec190f
 BUSYBOX_VERSION=1.21.1
 MAVEN_VERSION=3.1.1
 JDK_VERSION=1.8.0_11
@@ -46,6 +47,7 @@ $(OUT)/linux-$(KERNEL_VERSION).tar.xz:
 
 $(OUT)/aufs3-standalone:
 	git clone -b $(KERNEL_AUFS_BRANCH) git://git.code.sf.net/p/aufs/aufs3-standalone $(OUT)/aufs3-standalone
+	cd $(OUT)/aufs3-standalone && git checkout $(KERNEL_AUFS_COMMIT)
 
 
 # Chroot and rootfs
