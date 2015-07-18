@@ -5,7 +5,7 @@ echo "TMC customized initrd starting"
 mkdir /ro
 mkdir /rw
 mount -t squashfs -o ro /dev/ubda /ro
-mount -t tmpfs -o rw,size=64M none /rw
+mount -t tmpfs -o rw,size=128M none /rw
 
 mkdir /aufs
 mount -t aufs -o rw,br=/rw:/ro aufs /aufs
