@@ -29,7 +29,7 @@ BUSYBOX_VERSION=1.21.1
 MAVEN_VERSION=3.1.1
 JDK_VERSION=1.8.0_11
 JDK_PACKAGE_VERSION=8u11
-RUBY_VERSION=2.0.0-p247
+RUBY_VERSION=2.2.2
 
 # Kernel
 kernel: $(OUT)/linux.uml
@@ -153,7 +153,7 @@ $(CHROOT)/usr/bin/ruby: $(OUT)/ruby-$(RUBY_VERSION).tar.bz2 $(CHROOT_BASE_TIMEST
 	rm -Rf $(CHROOT)/root/ruby-$(RUBY_VERSION)
 
 $(OUT)/ruby-$(RUBY_VERSION).tar.bz2:
-	wget -O $@ ftp://ftp.ruby-lang.org/pub/ruby/2.0/ruby-$(RUBY_VERSION).tar.bz2 || (rm -f $@ && exit 1)
+	wget -O $@ ftp://ftp.ruby-lang.org/pub/ruby/2.2/ruby-$(RUBY_VERSION).tar.bz2 || (rm -f $@ && exit 1)
 
 # TMC Check
 tmc-check: $(CHROOT)/usr/lib/pkgconfig/tmccheck.pc
