@@ -15,7 +15,7 @@ script:
   - cd uml
   - ./run-test-exercise.sh
   - cd ../web
-  - rake test
+  - rvmsudo rake test
 
 after_failure:
   - cat /tmp/build.log
