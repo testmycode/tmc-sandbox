@@ -8,6 +8,7 @@ before_install:
   - sudo apt-get install -y squashfs-tools multistrap e2fsprogs e2tools
 
 before_script:
+  - cat /etc/hosts
   - ./.setup-sandbox-for-travis.sh
   - ./.setup-web-for-travis.sh
 
