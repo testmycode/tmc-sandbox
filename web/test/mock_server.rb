@@ -8,11 +8,11 @@ class MockServer
 
   def interact(&block)
     @req_data = nil
-    
+
     pipe_block do |pipe_in, pipe_out|
       server_pid = fork_server_process(pipe_in, pipe_out)
       pipe_out.close
-      
+
       begin
         reader = Thread.fork do
           begin
@@ -21,7 +21,7 @@ class MockServer
             @req_data = nil
           end
         end
-      
+
         wait_for_server_to_be_ready
         block.call
       ensure
@@ -30,15 +30,15 @@ class MockServer
           pipe_in.close
           reader.join rescue StandardError
         end
-        
+
         Process.kill("KILL", -server_pid) # Kill by process group.
         Process.waitpid(server_pid)
       end
     end
-    
+
     @req_data
   end
-  
+
 private
   def fork_server_process(pipe_in, pipe_out)
     Process.fork do
@@ -47,7 +47,7 @@ private
       $stdout.close
       $stderr.close
       pipe_in.close
-      
+
       app = Rack::Builder.new do
         map '/ready' do
           ready = lambda do
@@ -55,7 +55,7 @@ private
           end
           run ready
         end
-        
+
         map '/notify' do
           notify = lambda do |env|
             req = Rack::Request.new(env)
@@ -66,7 +66,7 @@ private
           run notify
         end
       end.to_app
-      
+
       webrick_log = WEBrick::Log.new('/dev/null')
       webrick_opts = {
         :Host => 'localhost',
@@ -77,9 +77,9 @@ private
       Rack::Handler::WEBrick.run(app, webrick_opts)
     end
   end
-  
+
   def wait_for_server_to_be_ready
-    deadline = Time.now + 10
+    deadline = Time.now + 100
     while Time.now < deadline
       begin
         Net::HTTP.get(URI('http://localhost:11988/ready'))
@@ -90,7 +90,7 @@ private
     end
     raise 'MockServer timed out waiting for server to become ready'
   end
-  
+
   def pipe_block(&block)
     # IO.pipe with a block not supported on Ruby 1.8.7
     infd, outfd = IO.pipe
