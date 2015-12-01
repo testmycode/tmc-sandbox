@@ -2,7 +2,7 @@
 # Configures and builds web api for travis
 
 cd web/
-bundle install
+bundle install  --retry=6 --jobs=3
 rake ext
 sed -i "s/\(tmc_user: \)tmc/\1 $(whoami)/" site.defaults.yml
 sed -i "s/\(tmc_group: \)tmc/\1 $(whoami)/" site.defaults.yml
