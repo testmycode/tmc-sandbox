@@ -5,6 +5,6 @@ curl -L http://ftp-master.debian.org/archive-key-6.0.asc | sudo apt-key add -
 sudo sed -i -e '989s/$forceyes//' /usr/sbin/multistrap
 # To workaround travis timeouts
 echo "Builing sandbox, it will take a while (upto 30 minutes)"
-while sleep 1; do echo -n "."; done &
-sudo make > /tmp/build.log 2>&1
-kill %1
+#while sleep 1; do echo -n "."; done &
+sudo make #> /tmp/build.log 2>&1
+#kill %1
