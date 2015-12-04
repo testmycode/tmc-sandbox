@@ -1,0 +1,21 @@
+sudo: required
+dist: trusty
+
+before_install:
+  - sudo apt-get update
+  - sudo apt-get install -y squashfs-tools multistrap e2fsprogs e2tools
+
+before_script:
+  - cat /etc/hosts
+  - ./.setup-sandbox-for-travis.sh
+  - ./.setup-web-for-travis.sh
+
+script:
+  - cd uml
+  - ./run-test-exercise.sh
+  - cd ../web
+  - rvmsudo rake test
+  - cat log/*
+
+after_failure:
+  - cat /tmp/build.log
