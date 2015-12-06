@@ -6,5 +6,5 @@ sudo sed -i -e '989s/$forceyes//' /usr/sbin/multistrap
 # To workaround travis timeouts
 echo "Builing sandbox, it will take a while (upto 30 minutes)"
 #while sleep 1; do echo -n "."; done &
-sudo -E make #> /tmp/build.log 2>&1
+rvmsudo make #> /tmp/build.log 2>&1
 #kill %1
