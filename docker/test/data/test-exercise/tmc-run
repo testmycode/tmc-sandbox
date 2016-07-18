@@ -1,0 +1,39 @@
+#!/bin/sh
+# This is a very flawed runscript but it'll do for now.
+
+announce() {
+  echo \$ $@
+  $@
+}
+. /etc/profile
+
+announce java -version
+
+TOTAL_RAM_KB=`cat /proc/meminfo | grep MemTotal | awk '{print $2}'`
+SANDBOX_RAM_KB=$(expr 32 \* 1024)
+
+ramdisk_usage_kb() {
+  df / | tail -n 1 | awk '{ print $3 }'
+}
+
+echo "Total RAM: ${TOTAL_RAM_KB}KB"
+echo "RAM used by ramdisk initially: $(ramdisk_usage_kb) KB"
+
+announce df -h
+
+announce mkdir -p classes/main
+announce mkdir -p classes/test
+announce javac -d classes/main -cp lib/*:src/ src/*.java || exit 101
+announce javac -d classes/test -cp lib/*:classes/main:test/ test/*.java || exit 101
+
+DEFS="-Dtmc.exercise_dir=`pwd`
+  -Dtmc.src_class_dir=`pwd`/classes/main
+  -Dtmc.test_class_dir=`pwd`/classes/test
+  -Dtmc.lib_dir=`pwd`/lib
+  -Dtmc.results_file=`pwd`/test_output.txt"
+
+TESTS="MainTest.testStuff{1.1}"
+
+announce java -cp lib/*:classes/main/:classes/test/ $DEFS "fi.helsinki.cs.tmc.testrunner.Main" $TESTS > stdout.txt 2> stderr.txt
+
+exit 0
