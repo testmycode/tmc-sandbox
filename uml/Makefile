@@ -22,9 +22,9 @@ CHROOT=$(OUT)/chroot
 dummy_create_output_dir := $(shell test -d $(OUT) || mkdir -p $(OUT))
 
 # Version numbers
-KERNEL_VERSION=3.11.10
-KERNEL_AUFS_BRANCH=aufs3.11
-KERNEL_AUFS_COMMIT=4fb486c3f5a38058bccb14a4c8999ff403ec190f
+KERNEL_VERSION=4.6.5
+KERNEL_AUFS_BRANCH=aufs4.6
+KERNEL_AUFS_COMMIT=244642729f45fd79cb3b91874ff0c82b4cfba328
 BUSYBOX_VERSION=1.21.1
 MAVEN_VERSION=3.1.1
 JDK_VERSION=1.8.0_11
@@ -34,7 +34,7 @@ RUBY_VERSION=2.2.2
 # Kernel
 kernel: $(OUT)/linux.uml
 
-$(OUT)/linux.uml: $(OUT)/linux-$(KERNEL_VERSION) $(OUT)/aufs3-standalone
+$(OUT)/linux.uml: $(OUT)/linux-$(KERNEL_VERSION) $(OUT)/aufs4-standalone
 	build-scripts/compile-kernel.sh $(OUT)/linux-$(KERNEL_VERSION) $(SUBMAKE_JOBS)
 	cp -f $(OUT)/linux-$(KERNEL_VERSION)/linux $@
 
@@ -43,12 +43,11 @@ $(OUT)/linux-$(KERNEL_VERSION): $(OUT)/linux-$(KERNEL_VERSION).tar.xz
 	cp kernel/kernel-config.amd64 $(OUT)/linux-$(KERNEL_VERSION)/.config
 
 $(OUT)/linux-$(KERNEL_VERSION).tar.xz:
-	wget -O $@ http://www.kernel.org/pub/linux/kernel/v3.0/linux-$(KERNEL_VERSION).tar.xz || (rm -f $@ && exit 1)
+	wget -O $@ http://www.kernel.org/pub/linux/kernel/v4.x/linux-$(KERNEL_VERSION).tar.xz || (rm -f $@ && exit 1)
 
 $(OUT)/aufs3-standalone:
-	git clone -b $(KERNEL_AUFS_BRANCH) git://git.code.sf.net/p/aufs/aufs3-standalone $(OUT)/aufs3-standalone
-	cd $(OUT)/aufs3-standalone && git checkout $(KERNEL_AUFS_COMMIT)
-
+	git clone -b $(KERNEL_AUFS_BRANCH) git://github.com/sfjro/aufs4-standalone.git $(OUT)/aufs4-standalone
+	cd $(OUT)/aufs4-standalone && git checkout $(KERNEL_AUFS_COMMIT)
 
 # Chroot and rootfs
 rootfs: $(OUT)/rootfs.squashfs
@@ -144,7 +143,7 @@ $(RUBYGEMS_TIMESTAMP_FILE): $(CHROOT)/usr/bin/ruby
 	rm -Rf $(CHROOT)/usr/lib/ruby/gems/*/cache
 	rm -f $(CHROOT)/etc/resolv.conf  # tmc-init will create one in the real sandbox
 	touch $(RUBYGEMS_TIMESTAMP_FILE)
-	
+
 
 $(CHROOT)/usr/bin/ruby: $(OUT)/ruby-$(RUBY_VERSION).tar.bz2 $(CHROOT_BASE_TIMESTAMP_FILE)
 	rm -Rf $(CHROOT)/root/ruby-$(RUBY_VERSION)
@@ -201,15 +200,15 @@ $(OUT)/initrd/init: chroot busybox
 
 # Cleanup
 clean: clean-kernel clean-ruby clean-tmc-check clean-rootfs clean-busybox clean-initrd
-	
+
 
 distclean:
 	rm -Rf $(OUT)
 
 clean-kernel:
 	rm -Rf $(OUT)/linux-$(KERNEL_VERSION)
-	rm -Rf $(OUT)/linux-$(KERNEL_VERSION).tar.bz2
-	rm -Rf $(OUT)/aufs3-standalone
+	rm -Rf $(OUT)/linux-$(KERNEL_VERSION).tar.xz
+	rm -Rf $(OUT)/aufs4-standalone
 
 distclean-kernel: clean-kernel
 	rm -Rf $(OUT)/linux.uml
