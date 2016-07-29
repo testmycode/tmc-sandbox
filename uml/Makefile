@@ -45,7 +45,7 @@ $(OUT)/linux-$(KERNEL_VERSION): $(OUT)/linux-$(KERNEL_VERSION).tar.xz
 $(OUT)/linux-$(KERNEL_VERSION).tar.xz:
 	wget -O $@ http://www.kernel.org/pub/linux/kernel/v4.x/linux-$(KERNEL_VERSION).tar.xz || (rm -f $@ && exit 1)
 
-$(OUT)/aufs3-standalone:
+$(OUT)/aufs4-standalone:
 	git clone -b $(KERNEL_AUFS_BRANCH) git://github.com/sfjro/aufs4-standalone.git $(OUT)/aufs4-standalone
 	cd $(OUT)/aufs4-standalone && git checkout $(KERNEL_AUFS_COMMIT)
 
@@ -63,7 +63,7 @@ $(OUT)/rootfs.squashfs: chroot
 
 CHROOT_BASE_TIMESTAMP_FILE=$(CHROOT)/var/log/dpkg.log
 
-chroot: $(CHROOT_BASE_TIMESTAMP_FILE) $(CHROOT)/sbin/tmc-init $(CHROOT)/sbin/fast-shutdown java maven ruby tmc-check
+chroot: $(CHROOT_BASE_TIMESTAMP_FILE) $(CHROOT)/sbin/tmc-init $(CHROOT)/sbin/fast-shutdown java maven tmc-check
 
 $(OUT)/multistrap.conf: rootfs/multistrap.conf.in
 	sed 's/__ARCH__/$(ARCH)/' < $< > $@
