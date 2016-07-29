@@ -12,13 +12,13 @@ if [ "$1" = '-n' ]; then
     echo "Run as root to get networking."
     exit 1
   fi
-  
+
   TAPDEV=tap_tmp
   IP=192.168.240.1
   SUBNET=192.168.240.0
-  
+
   NETWORK_OPTS=eth0=tuntap,$TAPDEV,,$IP
-  
+
   MISC_PATH=`dirname "$0"`/../misc
   MISC_PATH=`readlink -f "$MISC_PATH"`
   DNSMASQ_PATH="$MISC_PATH/dnsmasq"
@@ -28,18 +28,18 @@ if [ "$1" = '-n' ]; then
   SQUID_USER=`stat -c %U "$SQUIDROOT/var/run"`
   SQUID_PIDFILE="$SQUIDROOT/var/run/squid.pid"
   DNSMASQ_PIDFILE="$SQUIDROOT/var/run/dnsmasq.pid" # borrow squidroot
-  
+
   echo "I'll create a TAP device $TAPDEV with IP $IP."
   echo "Then I'll start the embedded dnsmasq and squid"
   echo "(make sure they're not already running)."
   echo "After the VM exits I'll try to restore everything as it was."
   echo "Hit Ctrl+C now if you don't like this. Press Enter to continue."
   read IGNORE
-  
+
   echo "Creating tap device $TAPDEV with IP $IP"
   ip tuntap add dev $TAPDEV mode tap user root
   ifconfig $TAPDEV $IP netmask 255.255.255.0 up
-  
+
   echo "Configuring squid"
   cat > "$SQUID_CONF" <<EOS
 acl SSL_ports port 443
@@ -74,7 +74,7 @@ EOS
 
   echo "Starting squid"
   $SQUID_PATH || exit 1
-  
+
   echo "Starting dnsmasq"
   DNSMASQ_OPTS="--conf-file=- --user=$SQUID_USER --group=nogroup --pid-file=$DNSMASQ_PIDFILE --bind-interfaces --interface=$TAPDEV"
   $DNSMASQ_PATH $DNSMASQ_OPTS < /dev/null
@@ -116,7 +116,7 @@ output/linux.uml \
 if [ "$NETWORKING" = 1 ]; then
   echo "Stopping dnsmasq"
   kill `cat $DNSMASQ_PIDFILE`
-  
+
   echo "Stopping squid"
   kill `cat $SQUID_PIDFILE`
 
