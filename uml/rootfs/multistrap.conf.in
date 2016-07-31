@@ -3,8 +3,8 @@ arch=__ARCH__
 directory=./output/chroot
 cleanup=false  # We'll tell squashfs to exclude the downloaded packages
 unpack=true
-debootstrap=Debian Updates
-aptsources=Debian Updates
+debootstrap=Debian Updates DebianBackports
+aptsources=Debian Updates DebianBackports
 setupscript=./build-scripts/before-dpkg-setup.sh
 
 [Debian]
@@ -13,11 +13,17 @@ source=http://ftp.fi.debian.org/debian
 keyring=debian-archive-keyring
 suite=jessie
 
+[DebianBackports]
+packages=openjdk-8-jdk
+source=http://ftp.fi.debian.org/debian
+keyring=debian-archive-keyring
+suite=jessie-backports
+
 [Updates]
 packages=
 source=http://security.debian.org/
 keyring=debian-archive-keyring
-suite=squeeze/updates
+suite=jessie/updates
 
 
 # Download http://ftp-master.debian.org/archive-key-6.0.asc and apt-key add it if on ubuntu or similar
