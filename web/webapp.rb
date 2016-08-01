@@ -22,7 +22,7 @@ class WebappProgram
   end
 
   def run
-    raise "This should be run as root." if network_enabled? && Process.uid != 0
+    #raise "This should be run as root." if network_enabled? && Process.uid != 0
 
     mkdir_p_for_tmc_user(Paths.lock_dir)
     mkdir_p_for_tmc_user(Paths.work_dir)

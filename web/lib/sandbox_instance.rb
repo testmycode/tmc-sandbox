@@ -15,12 +15,12 @@ class SandboxInstance
     @plugin_manager = plugin_manager
     nuke_work_dir!
 
-    @instance = UmlInstance.new
+    @instance = DockerInstance.new
 
     @instance.subprocess_init do
       wait_for_cooldown
 
-      ShellUtils.sh!(["dd", "if=/dev/zero", "of=#{output_tar_path}", "bs=#{@settings['max_output_size']}", "count=1"])
+      ShellUtils.sh!(["gdd", "if=/dev/zero", "of=#{output_tar_path}", "bs=#{@settings['max_output_size']}", "count=1"])
     end
 
     @instance.when_done do |process_status|

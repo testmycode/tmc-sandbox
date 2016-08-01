@@ -12,10 +12,10 @@ class SubprocessGroupWithTimeout
     @signal_handler = lambda do |sig|
       Process.kill(sig, @intermediate_pid) if @intermediate_pid != nil
     end
-    
+
     @intermediate_pid = nil
   end
-  
+
   # Runs block in an intermediate subprocess immediately after
   # the main subprocess finishes or times out.
   # Gives status of main process or :timeout as parameter
@@ -29,7 +29,7 @@ class SubprocessGroupWithTimeout
     SignalHandlers.add_trap(SignalHandlers.termination_signals, @signal_handler)
 
     pipe_in, pipe_out = IO.pipe
-    
+
     @intermediate_pid = Process.fork do
       SignalHandlers.restore_original_handler(SignalHandlers.termination_signals)
 
@@ -45,7 +45,7 @@ class SubprocessGroupWithTimeout
       # since otherwise UML child processes may be left, holding locks to files
       # and preventing future UMLs from starting.
       Process.setsid
-      
+
       worker_pid = fork_in_new_pgrp do
         pipe_out.close
         @block.call
@@ -62,13 +62,15 @@ class SubprocessGroupWithTimeout
         Process.kill("KILL", -worker_pid)
         exit!(1)
       end
-      
+
+      @log.debug "PIDS: Intermediate(#{Process.pid}) ready for SIGTERM"
       pipe_out.write("ready for SIGTERM")
       pipe_out.close
-      
+
       finished_pid, status = Process.waitpid2(-1)
       Signal.trap("SIGTERM", "SIG_DFL")
-      
+
+      @log.debug "PIDS: Intermediate(#{Process.pid}) MOAR traps"
       if finished_pid == worker_pid
         @log.debug "Worker finished with status #{status.inspect}"
         Process.kill("KILL", timeout_pid)
@@ -91,16 +93,16 @@ class SubprocessGroupWithTimeout
     end
     pipe_in.close
   end
-  
+
   def running?
     wait(false)
     @intermediate_pid != nil
   end
-  
+
   def wait(block = true)
     if @intermediate_pid
       @log.debug "Waiting for runner (#{@intermediate_pid}) to stop (blocking = #{block})"
-      
+
       pid, status = Process.waitpid2(@intermediate_pid, if block then 0 else Process::WNOHANG end)
       if pid != nil
         @log.debug "Runner (#{@intermediate_pid}) stopped. Status: #{status.inspect}."
@@ -109,7 +111,7 @@ class SubprocessGroupWithTimeout
       end
     end
   end
-  
+
   def kill
     if @intermediate_pid
       @log.debug "Killing runner (#{@intermediate_pid}) process group"
@@ -117,28 +119,28 @@ class SubprocessGroupWithTimeout
       wait
     end
   end
-  
+
 private
   def fork_in_new_pgrp(&block)
     pipe_in, pipe_out = IO.pipe
-    
+
     pid = Process.fork do
       pipe_in.close
       Process.setpgrp
       pipe_out.write("started")
       pipe_out.close
-      
+
       block.call
     end
     pipe_out.close
-    
+
     if pipe_in.read != "started"
       Process.kill("KILL", pid)
       Process.waitpid(pid)
       raise "subprocess did not signal started"
     end
     pipe_in.close
-    
+
     pid
   end
 end

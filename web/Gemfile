@@ -10,3 +10,5 @@ gem 'daemons'
 
 gem 'test-unit'
 gem 'rack-test'
+
+gem 'pry'

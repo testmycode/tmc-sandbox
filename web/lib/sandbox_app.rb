@@ -22,11 +22,11 @@ class SandboxApp
       @settings = settings
       @plugin_settings = settings['plugins'][plugin_name]
     end
-    
+
     def plugin_name
       ActiveSupport::Inflector.underscore(self.class.to_s)
     end
-    
+
     attr_reader :settings
 
     #
@@ -62,11 +62,11 @@ class SandboxApp
       raise "Not implemeted"
     end
   end
-  
+
   class PluginManager
     def initialize(settings)
       @settings = settings
-      
+
       @plugins = []
       if @settings['plugins'].is_a?(Hash)
         plugin_names = @settings['plugins'].keys.sort # arbitrary but predictable load order
@@ -95,7 +95,7 @@ class SandboxApp
         nil
       end
     end
-    
+
     def run_hook(hook, *args)
       rets = []
       for plugin in @plugins
@@ -118,13 +118,13 @@ class SandboxApp
       end
     end
   end
-  
+
   class Notifier
     def initialize(url, token)
       @url = url
       @token = token
     end
-    
+
     def send_notification(status, exit_code, output)
       postdata = output.merge({
         'token' => @token,
@@ -157,7 +157,7 @@ class SandboxApp
       @instances << SandboxInstance.new(i, @settings, @plugin_manager)
     end
   end
-  
+
   attr_reader :settings, :plugin_manager
 
   def call(env)
@@ -234,7 +234,7 @@ private
       end
     end
   end
-  
+
   def serve_post_task
     inst = @instances.find(&:idle?)
     if inst
@@ -257,7 +257,7 @@ private
     @respdata[:total_instances] = total
     @respdata[:loadavg] = File.read("/proc/loadavg").split(' ')[0..2] if File.exist?("/proc/loadavg")
   end
-  
+
   def init_check
     raise 'kernel not compiled' unless File.exist? Paths.kernel_path
     raise 'rootfs not prepared' unless File.exist? Paths.rootfs_path

@@ -8,6 +8,17 @@
 #include <signal.h>
 
 
+#include <signal.h>
+
+int sigwaitinfo(const sigset_t *set, siginfo_t *info)
+{
+    int sig = -1;
+
+    if ( sigwait(set, &sig) < 0 )
+        return -1;
+
+    return sig;
+}
 static VALUE misc_utils_module;
 
 static VALUE misc_utils_open_fds(VALUE mod);
@@ -46,13 +57,13 @@ static VALUE misc_utils_open_fds(VALUE mod)
     int fd_count = getdtablesize();
     int i;
     VALUE result = rb_ary_new();
-    
+
     for (i = 0; i < fd_count; ++i) {
         if (fcntl(i, F_GETFD) != -1) {
             rb_ary_push(result, INT2NUM(i));
         }
     }
-    
+
     return result;
 }
 
@@ -63,7 +74,7 @@ static VALUE misc_utils_cloexec(VALUE mod, VALUE fd)
     if (fcntl(NUM2INT(fd), F_SETFD, FD_CLOEXEC) == -1) {
         rb_sys_fail("Failed to set FD_CLOEXEC");
     }
-    
+
     return Qnil;
 }
 

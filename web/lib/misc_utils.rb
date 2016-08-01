@@ -17,7 +17,7 @@ module MiscUtils
   #     for some reason and so ought to be trapped just in case.
   #     Returns the name of the signal caught as a string without the 'SIG' prefix.
   #
-  
+
   # Sets O_CLOEXEC on all except the given FDs
   def self.cloexec_all_except(fds)
     fds = to_fd_numbers(fds)
@@ -31,7 +31,7 @@ module MiscUtils
       cloexec(fd)
     end
   end
-  
+
   # Returns the current backtrace as an array. A debugging aid.
   def self.current_backtrace
     bt = []
@@ -78,7 +78,7 @@ module MiscUtils
       false
     end
   end
-  
+
 private
   def self.to_fd_numbers(fds)
     fds.map {|fd| if fd.respond_to?(:fileno) then fd.fileno else fd end }
