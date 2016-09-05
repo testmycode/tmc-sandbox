@@ -4,12 +4,12 @@ SUBMAKE_JOBS=$2
 
 cd $KERNEL_DIR
 if [ ! -d fs/aufs ]; then
-  patch -p1 < ../aufs3-standalone/aufs3-kbuild.patch
-  patch -p1 < ../aufs3-standalone/aufs3-base.patch
-  patch -p1 < ../aufs3-standalone/aufs3-mmap.patch
-  cp -av ../aufs3-standalone/Documentation/* Documentation/
-  cp -av ../aufs3-standalone/fs/* fs/
-  cp -av ../aufs3-standalone/include/uapi/linux/aufs_type.h include/uapi/linux/
+  patch -p1 < ../aufs4-standalone/aufs4-kbuild.patch
+  patch -p1 < ../aufs4-standalone/aufs4-base.patch
+  patch -p1 < ../aufs4-standalone/aufs4-mmap.patch
+  cp -av ../aufs4-standalone/Documentation/* Documentation/
+  cp -av ../aufs4-standalone/fs/* fs/
+  cp -av ../aufs4-standalone/include/uapi/linux/aufs_type.h include/uapi/linux/
 fi
 
 if [ `uname -i` = i386 ]; then

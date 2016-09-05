@@ -13,4 +13,5 @@ fi
 
 # The JRE package setup fails if this directory is missing
 mkdir -p $CHROOT/var/lib/x11
+mkdir -p $CHROOT/opt/jdk/jre/lib/
 
