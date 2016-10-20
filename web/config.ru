@@ -6,7 +6,6 @@ $stdout.sync = true
 $stderr.sync = true
 
 require 'rack'
-require 'rack/commonlogger'
 require "#{File.dirname(File.realpath(__FILE__))}/init.rb"
 require 'sandbox_app'
 
