@@ -22,9 +22,9 @@ CHROOT=$(OUT)/chroot
 dummy_create_output_dir := $(shell test -d $(OUT) || mkdir -p $(OUT))
 
 # Version numbers
-KERNEL_VERSION=4.6.5
-KERNEL_AUFS_BRANCH=aufs4.6
-KERNEL_AUFS_COMMIT=244642729f45fd79cb3b91874ff0c82b4cfba328
+KERNEL_VERSION=4.7.10
+KERNEL_AUFS_BRANCH=aufs4.7
+KERNEL_AUFS_COMMIT=7731e69c5a26de9519332be64d973c91a377a582
 BUSYBOX_VERSION=1.21.1
 MAVEN_VERSION=3.1.1
 JDK_VERSION=1.8.0_102
@@ -43,7 +43,7 @@ $(OUT)/linux-$(KERNEL_VERSION): $(OUT)/linux-$(KERNEL_VERSION).tar.xz
 	cp kernel/kernel-config.amd64 $(OUT)/linux-$(KERNEL_VERSION)/.config
 
 $(OUT)/linux-$(KERNEL_VERSION).tar.xz:
-	wget -O $@ http://www.kernel.org/pub/linux/kernel/v4.x/linux-$(KERNEL_VERSION).tar.xz || (rm -f $@ && exit 1)
+	wget -O $@ https://www.kernel.org/pub/linux/kernel/v4.x/linux-$(KERNEL_VERSION).tar.xz || (rm -f $@ && exit 1)
 
 $(OUT)/aufs4-standalone:
 	git clone -b $(KERNEL_AUFS_BRANCH) git://github.com/sfjro/aufs4-standalone.git $(OUT)/aufs4-standalone
@@ -241,4 +241,3 @@ clean-initrd:
 
 distclean-initrd: clean-initrd
 	$(OUT)/initrd.img
-
