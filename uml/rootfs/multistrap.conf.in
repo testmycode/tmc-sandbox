@@ -14,7 +14,7 @@ keyring=debian-archive-keyring
 suite=jessie
 
 [DebianBackports]
-packages=openjdk-8-jdk
+packages=openjdk-8-jdk openjfx
 source=http://ftp.fi.debian.org/debian
 keyring=debian-archive-keyring
 suite=jessie-backports
