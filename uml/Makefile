@@ -22,14 +22,14 @@ CHROOT=$(OUT)/chroot
 dummy_create_output_dir := $(shell test -d $(OUT) || mkdir -p $(OUT))
 
 # Version numbers
-KERNEL_VERSION=4.7.10
-KERNEL_AUFS_BRANCH=aufs4.7
-KERNEL_AUFS_COMMIT=7731e69c5a26de9519332be64d973c91a377a582
-BUSYBOX_VERSION=1.21.1
+KERNEL_VERSION=4.9.33
+KERNEL_AUFS_BRANCH=aufs4.9
+KERNEL_AUFS_COMMIT=5b18dc78e44e6123f62a31b6ad20f9cea9cd1242
+BUSYBOX_VERSION=1.26.2
 MAVEN_VERSION=3.1.1
 JDK_VERSION=1.8.0_102
 JDK_PACKAGE_VERSION=8u102
-RUBY_VERSION=2.2.2
+RUBY_VERSION=2.4.1
 
 # Kernel
 kernel: $(OUT)/linux.uml
@@ -152,7 +152,7 @@ $(CHROOT)/usr/bin/ruby: $(OUT)/ruby-$(RUBY_VERSION).tar.bz2 $(CHROOT_BASE_TIMEST
 	rm -Rf $(CHROOT)/root/ruby-$(RUBY_VERSION)
 
 $(OUT)/ruby-$(RUBY_VERSION).tar.bz2:
-	wget -O $@ ftp://ftp.ruby-lang.org/pub/ruby/2.2/ruby-$(RUBY_VERSION).tar.bz2 || (rm -f $@ && exit 1)
+	wget -O $@ ftp://ftp.ruby-lang.org/pub/ruby/2.4/ruby-$(RUBY_VERSION).tar.bz2 || (rm -f $@ && exit 1)
 
 # TMC Check
 tmc-check: $(CHROOT)/usr/lib/pkgconfig/tmccheck.pc
