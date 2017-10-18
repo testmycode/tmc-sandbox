@@ -22,7 +22,7 @@ CHROOT=$(OUT)/chroot
 dummy_create_output_dir := $(shell test -d $(OUT) || mkdir -p $(OUT))
 
 # Version numbers
-KERNEL_VERSION=4.9.33
+KERNEL_VERSION=4.9.57
 KERNEL_AUFS_BRANCH=aufs4.9
 KERNEL_AUFS_COMMIT=5b18dc78e44e6123f62a31b6ad20f9cea9cd1242
 BUSYBOX_VERSION=1.26.2
