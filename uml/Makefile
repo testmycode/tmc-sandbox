@@ -63,7 +63,7 @@ $(OUT)/rootfs.squashfs: chroot
 
 CHROOT_BASE_TIMESTAMP_FILE=$(CHROOT)/var/log/dpkg.log
 
-chroot: $(CHROOT_BASE_TIMESTAMP_FILE) $(CHROOT)/sbin/tmc-init $(CHROOT)/sbin/fast-shutdown maven ruby tmc-check
+chroot: $(CHROOT_BASE_TIMESTAMP_FILE) $(CHROOT)/sbin/tmc-init $(CHROOT)/sbin/fast-shutdown maven ruby tmc-check r-plugin
 
 $(OUT)/multistrap.conf: rootfs/multistrap.conf.in
 	sed 's/__ARCH__/$(ARCH)/' < $< > $@
@@ -197,6 +197,13 @@ $(OUT)/initrd/init: chroot busybox
 	cp -a $(CHROOT)/dev $(OUT)/initrd/dev
 	cp initrd/initrd-init-script $(OUT)/initrd/init
 	chmod +x $(OUT)/initrd/init
+
+# R-plugin
+r-plugin:
+	cp /etc/resolv.conf $(CHROOT)/etc/resolv.conf
+	chroot $(CHROOT) sh -c "env HOME=/root Rscript -e 'install.packages(c(\"devtools\",\"testthat\", \"httr\", \"curl\"),repos=\"http://cran.us.r-project.org\")'"
+	chroot $(CHROOT) sh -c "env HOME=/root Rscript -e 'devtools::install_github(\"RTMC/tmc-r-tester/tmcRtestrunner\")'"
+	rm $(CHROOT)/etc/resolv.conf
 
 # Cleanup
 clean: clean-kernel clean-ruby clean-tmc-check clean-rootfs clean-busybox clean-initrd
